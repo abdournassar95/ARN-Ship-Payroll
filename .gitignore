@@ -1,0 +1,38 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest & testing cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local databases (لحماية بياناتك المحلية من الرفع على الإنترنت مع بقائها كاملة على جهازك)
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary / Debug / Local preference files
+temp*.txt
+login_prefs.json
+crew_debug.json
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Build & Dist artifacts
+build/
+dist/
+*.egg-info/
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
