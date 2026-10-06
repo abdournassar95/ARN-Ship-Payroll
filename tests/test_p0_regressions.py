@@ -32,8 +32,9 @@ SAMPLE_ROWS = [
          total_due=28476.67, curr_extra=0.0, curr_ded=150.0, prev_balance=0.0,
          payment_cash=800.0, cigarette=0.0, transfer=1000.0,
          total_received=1800.0, final_balance=26676.67, month=10, year=2026, is_settled=False),
+    # رصيد سابق موجب (له على الشركة): أجر الفترة 16,360 + 500 = إجمالي 16,860
     dict(id=3, name="عمر خالد", rank="BOSUN", basic_wage=1800.0, worked_days=281.0,
-         total_due=16860.00, curr_extra=0.0, curr_ded=0.0, prev_balance=-500.0,
+         total_due=16860.00, curr_extra=0.0, curr_ded=0.0, prev_balance=500.0,
          payment_cash=300.0, cigarette=90.0, transfer=400.0,
          total_received=790.0, final_balance=16070.00, month=10, year=2026, is_settled=False),
 ]
@@ -204,10 +205,13 @@ class TestPayrollSheetTotalsMatchEngine:
         text = _pdf_text(out_pdf)
         assert f"{expected_total:,.2f}" in text, "إجمالي المستحق في الكشف لا يطابق المحرك"
         assert f"{expected_net:,.2f}" in text
-        # الكشف يجب أن يُظهر العمودين الجديدين («رصيد سابق» و«خصم مباشر»)
-        # ملاحظة: استخراج النص من PDF قد يعيد ترتيب مقاطع RTL، لذلك نفحص الكلمات فرادى
-        for keyword in ("رصيد", "سابق", "خصم", "مباشر"):
-            assert keyword in text, f"كلمة «{keyword}» غير موجودة في كشف المسير"
+        # وجود عمودَي «رصيد سابق» و«خصم مباشر» يُتحقَّق منه بقيم الخلايا الرقمية
+        # (أكثر ثباتاً من رؤوس الأعمدة، لأن التفاف نص الرأس/ترتيب مقاطع RTL يختلف بين الأنظمة)
+        assert f"${SAMPLE_ROWS[1]['curr_ded']:,.2f}" in text, "قيمة «خصم مباشر» غير ظاهرة في الكشف"
+        assert f"${SAMPLE_ROWS[2]['prev_balance']:,.2f}" in text, "قيمة «رصيد سابق» غير ظاهرة في الكشف"
+        # رؤوس الأعمدة الجديدة (كلمتان مضمونتان بعد إزالة المسافات)
+        assert "رصيد" in text
+        assert "خصم" in text
 
 
 @pytest.mark.unit
