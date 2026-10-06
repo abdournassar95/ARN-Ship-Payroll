@@ -22,30 +22,6 @@ class AuditLogWindow(QDialog):
         self.setWindowTitle("سجل التدقيق والمراقبة 📋 | ARN Audit Trail")
         self.resize(1150, 720)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
-        self.setStyleSheet("""
-            QDialog { background-color: #0f172a; }
-            QFrame#FilterCard {
-                background-color: #1e293b;
-                border: 1px solid #334155;
-                border-radius: 10px;
-                padding: 10px;
-            }
-            QLabel { color: #94a3b8; font-family: 'Cairo'; font-size: 10pt; font-weight: bold; }
-            QLineEdit, QComboBox, QDateEdit {
-                background-color: #0f172a;
-                border: 1px solid #334155;
-                border-radius: 6px;
-                padding: 6px 10px;
-                color: #f8fafc;
-                font-family: 'Cairo';
-                font-size: 10pt;
-            }
-            QLineEdit:focus, QComboBox:focus, QDateEdit:focus { border-color: #3b82f6; }
-            QPushButton {
-                font-family: 'Cairo'; font-size: 10pt; font-weight: bold;
-                border-radius: 6px; padding: 7px 16px;
-            }
-        """)
 
         self.init_ui()
         self.load_filters_data()
@@ -53,8 +29,8 @@ class AuditLogWindow(QDialog):
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(16, 16, 16, 16)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(24, 20, 24, 20)
+        main_layout.setSpacing(16)
 
         # 1. شريط العنوان
         header_layout = QHBoxLayout()
@@ -120,12 +96,12 @@ class AuditLogWindow(QDialog):
         row2.addWidget(self.txt_search)
 
         btn_filter = QPushButton("تطبيق الفلترة 🔍")
-        btn_filter.setStyleSheet("background-color: #3b82f6; color: white;")
+        btn_filter.setObjectName("Primary")
         btn_filter.clicked.connect(self.refresh_logs)
         row2.addWidget(btn_filter)
 
         btn_reset = QPushButton("إعادة تعيين 🧹")
-        btn_reset.setStyleSheet("background-color: #475569; color: white;")
+        btn_reset.setObjectName("Outline")
         btn_reset.clicked.connect(self.reset_filters)
         row2.addWidget(btn_reset)
 
@@ -134,6 +110,7 @@ class AuditLogWindow(QDialog):
 
         # 3. جدول السجلات
         self.table = QTableWidget()
+        self.table.setAlternatingRowColors(True)
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
             "ID", "الوقت والتاريخ", "المستخدم", "الإجراء", "الجدول", "المعرف", "تفاصيل الحدث"
@@ -164,11 +141,11 @@ class AuditLogWindow(QDialog):
         # 4. شريط الأزرار السفلي
         bottom_layout = QHBoxLayout()
         self.btn_export = QPushButton("تصدير تقرير PDF 📄")
-        self.btn_export.setStyleSheet("background-color: #10b981; color: white;")
+        self.btn_export.setObjectName("Success")
         self.btn_export.clicked.connect(self.export_pdf)
 
         btn_close = QPushButton("إغلاق ❌")
-        btn_close.setStyleSheet("background-color: #334155; color: white;")
+        btn_close.setObjectName("Outline")
         btn_close.clicked.connect(self.close)
 
         bottom_layout.addWidget(self.btn_export)

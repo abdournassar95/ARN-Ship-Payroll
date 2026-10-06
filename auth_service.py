@@ -4,6 +4,7 @@ import sqlite3
 import hashlib
 import base64
 import time
+import hmac
 
 class AuthService:
     def __init__(self, db_path='arn_ship_payroll.db'):
@@ -21,7 +22,7 @@ class AuthService:
     def _verify_password(self, password: str, stored_salt: str, stored_hash: str) -> bool:
         salt = base64.b64decode(stored_salt.encode('utf-8'))
         key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
-        return base64.b64encode(key).decode('utf-8') == stored_hash
+        return hmac.compare_digest(base64.b64encode(key).decode('utf-8'), stored_hash)
 
     def _is_account_locked(self, username: str) -> bool:
         if username not in self.failed_attempts:
@@ -61,7 +62,7 @@ class AuthService:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 cursor.execute(
-                    "SELECT id, full_name, role, password_hash, password_salt FROM users WHERE username = ?",
+                    "SELECT id, full_name, role, password_hash, password_salt, must_change_password FROM users WHERE username = ?",
                     (username,)
                 )
                 user = cursor.fetchone()
@@ -88,7 +89,7 @@ class AuthService:
                 return {
                     "success": True,
                     "message": "تم تسجيل الدخول بنجاح",
-                    "user": {"id": user['id'], "full_name": user['full_name'], "role": user['role']}
+                    "user": {"id": user['id'], "full_name": user['full_name'], "role": user['role'], "must_change_password": bool(user['must_change_password'])}
                 }
             else:
                 self._record_failed_attempt(username)
@@ -104,6 +105,19 @@ class AuthService:
         except sqlite3.Error as e:
             return {"success": False, "message": f"خطأ في قاعدة البيانات: {str(e)}"}
 
+
+    def change_password(self, user_id, old_password, new_password):
+        if len(new_password) < 12 or new_password in ('admin123', 'captain123'):
+            raise ValueError('كلمة المرور الجديدة يجب ألا تقل عن 12 حرفاً')
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute('SELECT password_salt, password_hash FROM users WHERE id=?', (user_id,)).fetchone()
+            if not row or not self._verify_password(old_password, row[0], row[1]):
+                raise ValueError('كلمة المرور الحالية غير صحيحة')
+            if self._verify_password(new_password, row[0], row[1]):
+                raise ValueError('اختر كلمة مرور مختلفة')
+            hashed = self._hash_password(new_password)
+            conn.execute('UPDATE users SET password_hash=?, password_salt=?, must_change_password=0 WHERE id=?',
+                         (hashed['hash'], hashed['salt'], user_id))
 
     def create_test_user(self, username, password, full_name="Admin", role="admin"):
         hashed = self._hash_password(password)

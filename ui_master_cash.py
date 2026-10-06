@@ -18,6 +18,7 @@ from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont, QColor, QCursor
 
 from report_service import ReportService
+from money import amount as money_amount, cents, ZERO
 from audit_service import AuditService
 
 
@@ -44,80 +45,8 @@ class MasterCashWindow(QDialog):
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
 
-        self.apply_stylesheet()
         self.build_ui()
         self.load_cash_data()
-
-    def apply_stylesheet(self):
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #0f172a;
-            }
-            QFrame#Card {
-                background-color: #1e293b;
-                border: 1px solid #334155;
-                border-radius: 12px;
-            }
-            QLabel {
-                color: #e2e8f0;
-                font-family: 'Cairo', 'Segoe UI', sans-serif;
-            }
-            QLineEdit, QComboBox, QDateEdit {
-                background-color: #0f172a;
-                border: 1px solid #334155;
-                border-radius: 8px;
-                padding: 7px 12px;
-                color: #f8fafc;
-                font-family: 'Cairo';
-                font-size: 11pt;
-                font-weight: bold;
-            }
-            QLineEdit:focus, QComboBox:focus, QDateEdit:focus {
-                border-color: #3b82f6;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #1e293b;
-                color: #f8fafc;
-                selection-background-color: #3b82f6;
-                selection-color: #ffffff;
-                border: 1px solid #334155;
-            }
-            QPushButton {
-                font-family: 'Cairo';
-                font-weight: bold;
-                border-radius: 8px;
-                padding: 8px 16px;
-                font-size: 11pt;
-            }
-            QPushButton#Primary { background-color: #3b82f6; color: #ffffff; border: none; }
-            QPushButton#Primary:hover { background-color: #2563eb; }
-            QPushButton#Success { background-color: #10b981; color: #ffffff; border: none; }
-            QPushButton#Success:hover { background-color: #059669; }
-            QPushButton#Danger { background-color: #ef4444; color: #ffffff; border: none; }
-            QPushButton#Danger:hover { background-color: #dc2626; }
-            QPushButton#Outline { background-color: transparent; border: 1px solid #475569; color: #94a3b8; }
-            QPushButton#Outline:hover { background-color: #334155; color: #e2e8f0; }
-
-            QTableWidget {
-                background-color: #1e293b;
-                border: 1px solid #334155;
-                gridline-color: #33415540;
-                color: #e2e8f0;
-                font-family: 'Cairo';
-                border-radius: 8px;
-                selection-background-color: #3b82f640;
-                selection-color: #ffffff;
-            }
-            QHeaderView::section {
-                background-color: #0f172a;
-                color: #94a3b8;
-                padding: 9px;
-                border: none;
-                border-bottom: 2px solid #3b82f6;
-                font-weight: bold;
-                font-size: 11pt;
-            }
-        """)
 
     def add_shadow(self, widget):
         shadow = QGraphicsDropShadowEffect()
@@ -151,8 +80,8 @@ class MasterCashWindow(QDialog):
 
     def build_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(14)
+        main_layout.setContentsMargins(24, 20, 24, 20)
+        main_layout.setSpacing(18)
 
         # 1. شريط العنوان واختيار الفترة
         header_layout = QHBoxLayout()
@@ -262,6 +191,7 @@ class MasterCashWindow(QDialog):
         table_layout.setContentsMargins(12, 12, 12, 12)
 
         self.table = QTableWidget()
+        self.table.setAlternatingRowColors(True)
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
             "م", "التاريخ", "البيان", "النوع", "المبلغ ($)", "الرصيد التراكمي ($)", "الإجراءات"
@@ -360,10 +290,10 @@ class MasterCashWindow(QDialog):
         m_end = f"{self.current_year}-{self.current_month:02d}-{last_day:02d}"
 
         transactions = []
-        total_in = 0.0
-        total_out = 0.0
-        crew_advances = 0.0
-        cleared_advances = 0.0
+        total_in = ZERO
+        total_out = ZERO
+        crew_advances = ZERO
+        cleared_advances = ZERO
 
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -372,19 +302,19 @@ class MasterCashWindow(QDialog):
 
                 # 1. سلف البحارة لهذا الشهر من جدول الرواتب
                 adv_row = cursor.execute("""
-                    SELECT COALESCE(SUM(payment_cash), 0) as total_adv 
+                    SELECT payment_cash
                     FROM payroll_history 
                     WHERE payroll_month = ? AND payroll_year = ?
-                """, (self.current_month, self.current_year)).fetchone()
-                crew_advances = float(adv_row['total_adv']) if adv_row else 0.0
+                """, (self.current_month, self.current_year)).fetchall()
+                crew_advances = sum((money_amount(r['payment_cash']) for r in adv_row), ZERO)
 
                 # 2. فحص السلف المصفاة بموجب محضر استلام
                 snap_row = cursor.execute("""
-                    SELECT COALESCE(SUM(cleared_cash), 0) as total_cleared 
+                    SELECT cleared_cash
                     FROM cash_reset_snapshot 
                     WHERE payroll_month = ? AND payroll_year = ?
-                """, (self.current_month, self.current_year)).fetchone()
-                cleared_advances = float(snap_row['total_cleared']) if snap_row else 0.0
+                """, (self.current_month, self.current_year)).fetchall()
+                cleared_advances = sum((money_amount(r['cleared_cash']) for r in snap_row), ZERO)
 
                 # 3. حركات الصندوق العامة ضمن هذا الشهر
                 rows = cursor.execute("""
@@ -401,15 +331,15 @@ class MasterCashWindow(QDialog):
 
         # حساب الإجماليات
         for tx in transactions:
-            amt = float(tx['amount'] or 0)
+            amt = money_amount(tx['amount'])
             if tx['type'] == 'وارد':
                 total_in += amt
             else:
                 total_out += amt
 
         # صافي سلف البحارة المحملة على الصندوق لهذا الشهر
-        effective_crew_adv = max(0.0, crew_advances - cleared_advances)
-        net_cash = total_in - total_out - effective_crew_adv
+        effective_crew_adv = max(ZERO, cents(crew_advances - cleared_advances))
+        net_cash = cents(total_in - total_out - effective_crew_adv)
 
         # تحديث كروت المؤشرات
         self.val_kpi_in.setText(f"+${total_in:,.2f}")
@@ -423,12 +353,12 @@ class MasterCashWindow(QDialog):
 
         # تعبئة الجدول
         self.table.setRowCount(0)
-        running_bal = 0.0
+        running_bal = ZERO
 
         for i, tx in enumerate(transactions):
             self.table.insertRow(i)
             self.table.setRowHeight(i, 44)
-            amt = float(tx['amount'] or 0)
+            amt = money_amount(tx['amount'])
 
             if tx['type'] == 'وارد':
                 running_bal += amt
@@ -495,10 +425,10 @@ class MasterCashWindow(QDialog):
 
         self.latest_transactions = transactions
         self.latest_summary = {
-            'in': total_in,
-            'out': total_out,
-            'crew_adv': effective_crew_adv,
-            'net': net_cash,
+            'in': float(cents(total_in)),
+            'out': float(cents(total_out)),
+            'crew_adv': float(effective_crew_adv),
+            'net': float(net_cash),
             'old_adv': 0.0
         }
 
@@ -518,7 +448,7 @@ class MasterCashWindow(QDialog):
             return
 
         try:
-            amount = float(amt_str)
+            amount = cents(amt_str)
             if amount <= 0:
                 raise ValueError()
         except ValueError:
@@ -531,7 +461,7 @@ class MasterCashWindow(QDialog):
                 cursor.execute("""
                     INSERT INTO general_cash (amount, type, description, date)
                     VALUES (?, ?, ?, ?)
-                """, (amount, tx_type, desc, date_str))
+                """, (float(amount), tx_type, desc, date_str))
                 tx_id = cursor.lastrowid
                 conn.commit()
 
@@ -651,16 +581,16 @@ class MasterCashWindow(QDialog):
                         WHERE payroll_month = ? AND payroll_year = ? AND payment_cash > 0
                     """, (self.current_month, self.current_year)).fetchall()
 
-                    total_cleared = 0.0
+                    total_cleared = ZERO
                     for row in advances:
-                        cid, pcash = row[0], float(row[1])
+                        cid, pcash = row[0], money_amount(row[1])
                         total_cleared += pcash
                         cursor.execute("""
                             INSERT INTO cash_reset_snapshot (crew_id, payroll_month, payroll_year, cleared_cash)
                             VALUES (?, ?, ?, ?)
                             ON CONFLICT(crew_id, payroll_month, payroll_year)
                             DO UPDATE SET cleared_cash = excluded.cleared_cash
-                        """, (cid, self.current_month, self.current_year, pcash))
+                        """, (cid, self.current_month, self.current_year, float(cents(pcash))))
 
                     # تسجيل حركة إدارية في الصندوق
                     today_str = datetime.now().strftime("%Y-%m-%d")

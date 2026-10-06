@@ -1,3 +1,4 @@
+from money import cents
 # ui_accounting.py
 import sqlite3
 import json
@@ -19,7 +20,6 @@ class WageHistoryDialog(QDialog):
         self.setWindowTitle("سجل تاريخ زيادات الرواتب 📈")
         self.resize(520, 420)
         self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
-        self.setStyleSheet("QDialog { background-color: #0f172a; } QLabel { color: #e2e8f0; font-family: 'Cairo'; }")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(15, 15, 15, 15)
@@ -39,6 +39,7 @@ class WageHistoryDialog(QDialog):
         layout.addWidget(lbl)
 
         table = QTableWidget()
+        table.setAlternatingRowColors(True)
         table.setColumnCount(3)
         table.setHorizontalHeaderLabels(["الفترة (سنة-شهر)", "الراتب الشهري", "الحالة"])
         table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -102,24 +103,6 @@ class AccountingWindow(QDialog):
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         
         # Apply dark theme stylesheet matching main dashboard
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #0f172a;
-            }
-            QScrollArea {
-                border: none;
-                background-color: transparent;
-            }
-            QLabel {
-                color: #e2e8f0;
-                font-family: 'Cairo';
-            }
-            QCheckBox {
-                color: #e2e8f0;
-                font-family: 'Cairo';
-                font-weight: bold;
-            }
-        """)
         
         self.load_db_data()
         self.build_ui()
@@ -621,11 +604,11 @@ class AccountingWindow(QDialog):
 
     def save_current_form_to_cache(self):
         try:
-            extra = float(self.extra_e.text() or 0)
-            deduct = float(self.deduct_e.text() or 0)
-            cash = float(self.cash_e.text() or 0)
-            cig = float(self.cig_e.text() or 0)
-            trans = float(self.trans_e.text() or 0)
+            extra = float(cents(self.extra_e.text() or 0))
+            deduct = float(cents(self.deduct_e.text() or 0))
+            cash = float(cents(self.cash_e.text() or 0))
+            cig = float(cents(self.cig_e.text() or 0))
+            trans = float(cents(self.trans_e.text() or 0))
             self.history_cache[(self.current_year, self.current_month)] = {
                 'extra': extra,
                 'deduction': deduct,
@@ -665,11 +648,11 @@ class AccountingWindow(QDialog):
             
             name = self.name_e.text()
             rank = self.rank_combo.currentText()
-            new_wage = float(self.wage_e.text() or 0)
+            new_wage = float(cents(self.wage_e.text() or 0))
             period_from = self.period_cal.date().toString("yyyy-MM-dd")
             contract_start = self.contract_start_cal.date().toString("yyyy-MM-dd")
             contract_end = self.contract_end_cal.date().toString("yyyy-MM-dd")
-            previous = float(self.prev_e.text() or 0)
+            previous = float(cents(self.prev_e.text() or 0))
             
             # Clean up paid_months_data: remove False entries
             cleaned_paid = {k: True for k, v in self.paid_months_data.items() if v}

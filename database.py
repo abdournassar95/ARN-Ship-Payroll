@@ -1,9 +1,11 @@
 # database.py
 import sqlite3
 import hashlib
+import base64
+from db_safety import connect
 
 def init_db(db_path='arn_ship_payroll.db'):
-    conn = sqlite3.connect(db_path)
+    conn = connect(db_path)
     cursor = conn.cursor()
     
     # 1. جدول المستخدمين
@@ -12,6 +14,7 @@ def init_db(db_path='arn_ship_payroll.db'):
         username TEXT UNIQUE,
         password_hash TEXT,
         password_salt TEXT,
+        must_change_password INTEGER NOT NULL DEFAULT 0,
         full_name TEXT,
         role TEXT
     )''')
@@ -186,11 +189,27 @@ def init_db(db_path='arn_ship_payroll.db'):
         pass
 
     
+    # Existing installations keep their current password policy; new seed accounts must rotate.
+    if 'must_change_password' not in {row[1] for row in cursor.execute("PRAGMA table_info(users)")}:
+        cursor.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0")
+
+    # Require rotation on legacy installations still using the published seed password.
+    for user_name, default_password in (("admin", "admin123"), ("captain", "captain123")):
+        row = cursor.execute("SELECT id, password_hash, password_salt FROM users WHERE username=?", (user_name,)).fetchone()
+        if row and row[1] and row[2]:
+            try:
+                salt = base64.b64decode(row[2])
+                expected = base64.b64encode(hashlib.pbkdf2_hmac(
+                    'sha256', default_password.encode(), salt, 100000)).decode()
+                if expected == row[1]:
+                    cursor.execute("UPDATE users SET must_change_password=1 WHERE id=?", (row[0],))
+            except (ValueError, TypeError):
+                pass
+
     # إنشاء حسابات افتراضية مشفرة بـ PBKDF2 إذا كان الجدول فارغاً
     cursor.execute("SELECT COUNT(*) FROM users")
     if cursor.fetchone()[0] == 0:
         import os
-        import base64
         def _hash_pw(password: str):
             salt = os.urandom(32)
             key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
@@ -198,13 +217,13 @@ def init_db(db_path='arn_ship_payroll.db'):
         
         admin_hash, admin_salt = _hash_pw("admin123")
         cursor.execute(
-            "INSERT INTO users (username, password_hash, password_salt, full_name, role) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO users (username, password_hash, password_salt, full_name, role, must_change_password) VALUES (?, ?, ?, ?, ?, 1)",
             ("admin", admin_hash, admin_salt, "عبده رجب نصار", "Admin")
         )
         
         capt_hash, capt_salt = _hash_pw("captain123")
         cursor.execute(
-            "INSERT INTO users (username, password_hash, password_salt, full_name, role) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO users (username, password_hash, password_salt, full_name, role, must_change_password) VALUES (?, ?, ?, ?, ?, 1)",
             ("captain", capt_hash, capt_salt, "قبطان السفينة", "Captain")
         )
         
@@ -220,4 +239,4 @@ if __name__ == "__main__":
         pass
     # عند تشغيل هذا الملف مباشرة، سيقوم بإصلاح قاعدة البيانات
     init_db()
-    print("تم فحص وتحديث قاعدة البيانات بنجاح.")
+    print("تم فحص وتحديث قاعدة البيانات بنجاح.")

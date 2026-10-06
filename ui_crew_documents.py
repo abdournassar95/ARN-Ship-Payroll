@@ -47,29 +47,6 @@ class AddDocDialog(QDialog):
         self.setWindowTitle("إضافة شهادة / وثيقة ملاحية جديدة 📜")
         self.setFixedSize(520, 420)
         self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
-        self.setStyleSheet("""
-            QDialog { background-color: #0f172a; }
-            QLabel { color: #e2e8f0; font-family: 'Cairo'; font-size: 10pt; font-weight: bold; }
-            QLineEdit, QDateEdit, QComboBox {
-                background-color: #1e293b;
-                border: 1px solid #334155;
-                border-radius: 6px;
-                padding: 6px 10px;
-                color: #f8fafc;
-                font-family: 'Cairo';
-                font-size: 10pt;
-            }
-            QLineEdit:focus, QDateEdit:focus, QComboBox:focus { border-color: #38bdf8; }
-            QComboBox QAbstractItemView {
-                background-color: #1e293b;
-                color: #f8fafc;
-                selection-background-color: #0284c7;
-            }
-            QPushButton {
-                font-family: 'Cairo'; font-size: 10pt; font-weight: bold;
-                border-radius: 6px; padding: 8px 18px;
-            }
-        """)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -123,11 +100,11 @@ class AddDocDialog(QDialog):
 
         btn_layout = QHBoxLayout()
         btn_cancel = QPushButton("إلغاء")
-        btn_cancel.setStyleSheet("background-color: #334155; color: white;")
+        btn_cancel.setObjectName("Outline")
         btn_cancel.clicked.connect(self.reject)
 
         btn_save = QPushButton("حفظ الشهادة 💾")
-        btn_save.setStyleSheet("background-color: #10b981; color: white;")
+        btn_save.setObjectName("Success")
         btn_save.clicked.connect(self.accept)
 
         btn_layout.addWidget(btn_cancel)
@@ -153,29 +130,6 @@ class EditDocDialog(QDialog):
         self.setWindowTitle("تعديل / تجديد الشهادة الملاحية ✏️")
         self.setFixedSize(500, 380)
         self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
-        self.setStyleSheet("""
-            QDialog { background-color: #0f172a; }
-            QLabel { color: #e2e8f0; font-family: 'Cairo'; font-size: 10pt; font-weight: bold; }
-            QLineEdit, QDateEdit, QComboBox {
-                background-color: #1e293b;
-                border: 1px solid #334155;
-                border-radius: 6px;
-                padding: 6px 10px;
-                color: #f8fafc;
-                font-family: 'Cairo';
-                font-size: 10pt;
-            }
-            QLineEdit:focus, QDateEdit:focus, QComboBox:focus { border-color: #38bdf8; }
-            QComboBox QAbstractItemView {
-                background-color: #1e293b;
-                color: #f8fafc;
-                selection-background-color: #0284c7;
-            }
-            QPushButton {
-                font-family: 'Cairo'; font-size: 10pt; font-weight: bold;
-                border-radius: 6px; padding: 8px 18px;
-            }
-        """)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -228,11 +182,11 @@ class EditDocDialog(QDialog):
 
         btn_layout = QHBoxLayout()
         btn_cancel = QPushButton("إلغاء")
-        btn_cancel.setStyleSheet("background-color: #334155; color: white;")
+        btn_cancel.setObjectName("Outline")
         btn_cancel.clicked.connect(self.reject)
 
         btn_save = QPushButton("حفظ التعديلات 💾")
-        btn_save.setStyleSheet("background-color: #0284c7; color: white;")
+        btn_save.setObjectName("Primary")
         btn_save.clicked.connect(self.accept)
 
         btn_layout.addWidget(btn_cancel)
@@ -308,6 +262,7 @@ class CrewDocumentsWidget(QWidget):
 
         # جدول الشهادات
         self.table = QTableWidget()
+        self.table.setAlternatingRowColors(True)
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
             "ID", "نوع الشهادة", "رقم الوثيقة", "تاريخ الإصدار", "تاريخ الانتهاء", "الأيام المتبقية", "ملاحظات"
@@ -489,7 +444,6 @@ class CrewDocumentsDialog(QDialog):
         self.setMinimumSize(700, 460)
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
-        self.setStyleSheet("QDialog { background-color: #0f172a; }")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -530,28 +484,9 @@ class FleetDocumentsDialog(QDialog):
         self.all_docs_cache: List[Dict[str, Any]] = []
 
         self.setWindowTitle("📜 منظومة الشهادات والوثائق والخدمة البحرية للطاقم - ARN Maritime Docs")
-        self.resize(1120, 720)
-        self.setMinimumSize(950, 580)
+        self.resize(1180, 800)
+        self.setMinimumSize(900, 640)
         self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
-        self.setStyleSheet("""
-            QDialog { background-color: #0f172a; }
-            QLabel { color: #f8fafc; font-family: 'Cairo'; }
-            QLineEdit, QComboBox {
-                background-color: #1e293b;
-                border: 1px solid #334155;
-                border-radius: 8px;
-                padding: 7px 12px;
-                color: #f8fafc;
-                font-family: 'Cairo';
-                font-size: 10pt;
-            }
-            QLineEdit:focus, QComboBox:focus { border-color: #38bdf8; }
-            QComboBox QAbstractItemView {
-                background-color: #1e293b;
-                color: #f8fafc;
-                selection-background-color: #0284c7;
-            }
-        """)
 
         self.init_ui()
         self.load_crew_list()
@@ -559,13 +494,14 @@ class FleetDocumentsDialog(QDialog):
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(18, 16, 18, 16)
-        main_layout.setSpacing(14)
+        main_layout.setContentsMargins(24, 22, 24, 20)
+        main_layout.setSpacing(18)
 
         # 1. الترويسة الرئيسية
         header_layout = QHBoxLayout()
         header_title = QLabel("⚓ منظومة إدارة الوثائق والشهادات البحرية وتواريخ الصلاحية")
-        header_title.setFont(QFont("Cairo", 14, QFont.Weight.Bold))
+        header_title.setFont(QFont("Cairo", 15, QFont.Weight.Bold))
+        header_title.setWordWrap(True)
         header_title.setStyleSheet("color: #38bdf8;")
 
         sub_title = QLabel("نظام الرقابة والتوافق الملاحي (STCW / Flag State / Port State Control)")
@@ -573,6 +509,7 @@ class FleetDocumentsDialog(QDialog):
         sub_title.setStyleSheet("color: #94a3b8;")
 
         header_vbox = QVBoxLayout()
+        header_vbox.setSpacing(4)
         header_vbox.addWidget(header_title)
         header_vbox.addWidget(sub_title)
         header_layout.addLayout(header_vbox)
@@ -582,50 +519,51 @@ class FleetDocumentsDialog(QDialog):
         self.btn_add_doc = QPushButton("➕ إضافة وثيقة جديدة")
         self.btn_add_doc.setFont(QFont("Cairo", 10, QFont.Weight.Bold))
         self.btn_add_doc.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        self.btn_add_doc.setStyleSheet("""
-            QPushButton {
-                background-color: #10b981; color: white; border-radius: 8px; padding: 8px 18px;
-            }
-            QPushButton:hover { background-color: #059669; }
-        """)
+        self.btn_add_doc.setObjectName("Success")
+        self.btn_add_doc.setMinimumHeight(42)
         self.btn_add_doc.clicked.connect(self.add_new_document)
 
         self.btn_print_report = QPushButton("🖨️ طباعة تقرير الشهادات (PDF)")
         self.btn_print_report.setFont(QFont("Cairo", 10, QFont.Weight.Bold))
         self.btn_print_report.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        self.btn_print_report.setStyleSheet("""
-            QPushButton {
-                background-color: #0284c7; color: white; border-radius: 8px; padding: 8px 18px;
-            }
-            QPushButton:hover { background-color: #0369a1; }
-        """)
+        self.btn_print_report.setObjectName("Primary")
+        self.btn_print_report.setMinimumHeight(42)
         self.btn_print_report.clicked.connect(self.print_documents_report)
 
-        header_layout.addWidget(self.btn_add_doc)
-        header_layout.addWidget(self.btn_print_report)
+        # Keep actions on a separate row so long Arabic titles never compete for width.
         main_layout.addLayout(header_layout)
+        actions_layout = QHBoxLayout()
+        actions_layout.setSpacing(10)
+        actions_layout.addWidget(self.btn_add_doc)
+        actions_layout.addWidget(self.btn_print_report)
+        actions_layout.addStretch()
+        main_layout.addLayout(actions_layout)
 
         # 2. كروت الإحصائيات (KPI Cards)
         kpi_layout = QHBoxLayout()
-        kpi_layout.setSpacing(12)
+        kpi_layout.setSpacing(16)
 
         self.kpi_total = self._create_kpi_card("📄 إجمالي الشهادات", "0", "#38bdf8")
         self.kpi_valid = self._create_kpi_card("✅ شهادات سارية", "0", "#10b981")
         self.kpi_expiring = self._create_kpi_card("⚠️ تنتهي قريباً (خلال 60 يوماً)", "0", "#f59e0b")
         self.kpi_expired = self._create_kpi_card("🚨 منتهية الصلاحية", "0", "#ef4444")
 
-        kpi_layout.addWidget(self.kpi_total['frame'])
-        kpi_layout.addWidget(self.kpi_valid['frame'])
-        kpi_layout.addWidget(self.kpi_expiring['frame'])
-        kpi_layout.addWidget(self.kpi_expired['frame'])
+        kpi_layout.addWidget(self.kpi_total['frame'], 1)
+        kpi_layout.addWidget(self.kpi_valid['frame'], 1)
+        kpi_layout.addWidget(self.kpi_expiring['frame'], 1)
+        kpi_layout.addWidget(self.kpi_expired['frame'], 1)
         main_layout.addLayout(kpi_layout)
 
         # 3. شريط الفلاتر والبحث
         filter_frame = QFrame()
-        filter_frame.setStyleSheet("background-color: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 6px;")
-        filter_layout = QHBoxLayout(filter_frame)
-        filter_layout.setContentsMargins(12, 6, 12, 6)
-        filter_layout.setSpacing(12)
+        filter_frame.setObjectName("FleetFilterCard")
+        filter_layout = QVBoxLayout(filter_frame)
+        filter_layout.setContentsMargins(14, 10, 14, 10)
+        filter_layout.setSpacing(8)
+        fields_row = QHBoxLayout()
+        fields_row.setSpacing(10)
+        search_row = QHBoxLayout()
+        search_row.setSpacing(10)
 
         lbl_crew = QLabel("البحار:")
         lbl_crew.setFont(QFont("Cairo", 10, QFont.Weight.Bold))
@@ -643,51 +581,46 @@ class FleetDocumentsDialog(QDialog):
 
         self.search_entry = QLineEdit()
         self.search_entry.setPlaceholderText("🔍 بحث سريع (اسم البحار، نوع الشهادة، رقم الوثيقة...)")
+        self.search_entry.setClearButtonEnabled(True)
+        self.search_entry.setMinimumHeight(40)
         self.search_entry.textChanged.connect(self.apply_filters)
 
         btn_refresh = QPushButton("🔄 تحديث")
         btn_refresh.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        btn_refresh.setStyleSheet("background-color: #334155; color: white; border-radius: 6px; padding: 6px 14px; font-weight: bold;")
+        btn_refresh.setObjectName("Outline")
+        btn_refresh.setMinimumHeight(40)
         btn_refresh.clicked.connect(self.load_fleet_documents)
 
-        filter_layout.addWidget(lbl_crew)
-        filter_layout.addWidget(self.combo_crew_filter)
-        filter_layout.addWidget(lbl_status)
-        filter_layout.addWidget(self.combo_status_filter)
-        filter_layout.addWidget(self.search_entry, 1)
-        filter_layout.addWidget(btn_refresh)
+        fields_row.addWidget(lbl_crew)
+        fields_row.addWidget(self.combo_crew_filter, 1)
+        fields_row.addWidget(lbl_status)
+        fields_row.addWidget(self.combo_status_filter, 1)
+        search_row.addWidget(self.search_entry, 1)
+        search_row.addWidget(btn_refresh)
+        filter_layout.addLayout(fields_row)
+        filter_layout.addLayout(search_row)
         main_layout.addWidget(filter_frame)
 
         # 4. جدول الشهادات المركزي
         self.table = QTableWidget()
+        self.table.setAlternatingRowColors(True)
         self.table.setColumnCount(10)
         self.table.setHorizontalHeaderLabels([
             "م", "اسم البحار", "الرتبة", "نوع الشهادة / الوثيقة", "رقم الوثيقة",
             "تاريخ الإصدار", "تاريخ الانتهاء", "الأيام المتبقية", "الحالة", "الإجراءات"
         ])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(9, QHeaderView.ResizeMode.ResizeToContents)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        for column, width in enumerate((45, 170, 100, 205, 135, 125, 125, 110, 105, 170)):
+            self.table.setColumnWidth(column, width)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        self.table.setHorizontalScrollMode(QTableWidget.ScrollMode.ScrollPerPixel)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.table.setStyleSheet("""
-            QTableWidget {
-                background-color: #1e293b;
-                border: 1px solid #334155;
-                gridline-color: #334155;
-                color: #f8fafc;
-                font-family: 'Cairo';
-                border-radius: 10px;
-            }
-            QHeaderView::section {
-                background-color: #0f172a;
-                color: #94a3b8;
-                font-weight: bold;
-                padding: 8px;
-                border: 1px solid #334155;
-            }
-        """)
-        main_layout.addWidget(self.table)
+        self.table.setShowGrid(False)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setMinimumHeight(200)
+        main_layout.addWidget(self.table, 1)
 
         # 5. زر الإغلاق السفلي
         footer_layout = QHBoxLayout()
@@ -699,39 +632,37 @@ class FleetDocumentsDialog(QDialog):
         btn_close = QPushButton("إغلاق النافذة")
         btn_close.setFont(QFont("Cairo", 10, QFont.Weight.Bold))
         btn_close.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        btn_close.setStyleSheet("""
-            QPushButton {
-                background-color: #334155; color: white; border-radius: 6px; padding: 8px 24px;
-            }
-            QPushButton:hover { background-color: #475569; }
-        """)
+        btn_close.setObjectName("Outline")
+        btn_close.setMinimumHeight(40)
         btn_close.clicked.connect(self.accept)
         footer_layout.addWidget(btn_close)
         main_layout.addLayout(footer_layout)
 
     def _create_kpi_card(self, title: str, val: str, color_hex: str) -> Dict[str, Any]:
         frame = QFrame()
-        frame.setStyleSheet(f"""
-            QFrame {{
-                background-color: #1e293b;
-                border: 1px solid #334155;
-                border-top: 3px solid {color_hex};
-                border-radius: 10px;
-                padding: 10px;
-            }}
-        """)
+        # No stylesheet on the parent frame: Qt can propagate it to child
+        # QLabel (which also inherits QFrame), drawing nested borders.
+        frame.setObjectName({
+            "#38bdf8": "FleetKpiTotal",
+            "#10b981": "FleetKpiValid",
+            "#f59e0b": "FleetKpiSoon",
+            "#ef4444": "FleetKpiExpired",
+        }.get(color_hex, "FleetKpiTotal"))
         layout = QVBoxLayout(frame)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(4)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(6)
+        frame.setMinimumHeight(98)
 
         t_lbl = QLabel(title)
         t_lbl.setFont(QFont("Cairo", 9, QFont.Weight.Bold))
-        t_lbl.setStyleSheet("color: #94a3b8;")
+        t_lbl.setStyleSheet("color: #94a3b8; border: none; background: transparent; padding: 0;")
         t_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        t_lbl.setWordWrap(True)
+        t_lbl.setMinimumHeight(36)
 
         v_lbl = QLabel(val)
         v_lbl.setFont(QFont("Cairo", 16, QFont.Weight.Bold))
-        v_lbl.setStyleSheet(f"color: {color_hex};")
+        v_lbl.setStyleSheet(f"color: {color_hex}; border: none; background: transparent; padding: 0;")
         v_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         layout.addWidget(t_lbl)

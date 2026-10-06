@@ -40,164 +40,88 @@ COLOR_WARNING_PRESSED = "#92400e"
 COLOR_INFO = "#38bdf8"
 COLOR_INFO_MUTED = "#93c5fd"
 
+# Spacing scale shared by the window layouts (logical pixels).
+SPACE_XS, SPACE_SM, SPACE_MD, SPACE_LG, SPACE_XL = 4, 8, 12, 18, 24
+
+# Keep selectors narrow: QLabel inherits QFrame in Qt. A generic "QFrame"
+# rule draws borders on labels and creates the nested boxes seen in the UI.
 STYLESHEET = f"""
-/* الإعدادات العامة للخطوط والخلفيات */
-QWidget {{
-    font-family: 'Cairo';
-    font-size: 11pt;
-    color: {COLOR_TEXT_MAIN};
+QWidget {{ font-family: 'Cairo', 'Segoe UI', sans-serif; font-size: 10pt; color: {COLOR_TEXT_MAIN}; }}
+QMainWindow, QDialog {{ background-color: {COLOR_BG}; }}
+QFrame#Card, QFrame#StatCard, QFrame#FilterCard, QFrame#FleetFilterCard {{
+    background-color: {COLOR_SURFACE}; border: 1px solid {COLOR_BORDER}; border-radius: 10px;
 }}
-QMainWindow, QDialog, QScrollArea {{
-    background-color: {COLOR_BG};
+QFrame#FleetKpiTotal, QFrame#FleetKpiValid, QFrame#FleetKpiSoon, QFrame#FleetKpiExpired {{
+    background-color: {COLOR_SURFACE}; border: 1px solid {COLOR_BORDER}; border-radius: 10px;
 }}
+QFrame#FleetKpiTotal {{ border-top: 3px solid {COLOR_INFO}; }}
+QFrame#FleetKpiValid {{ border-top: 3px solid {COLOR_SUCCESS}; }}
+QFrame#FleetKpiSoon {{ border-top: 3px solid {COLOR_WARNING}; }}
+QFrame#FleetKpiExpired {{ border-top: 3px solid {COLOR_DANGER}; }}
+QScrollArea {{ border: none; background: transparent; }}
+QLineEdit, QComboBox, QDateEdit, QSpinBox, QDoubleSpinBox, QTextEdit, QPlainTextEdit {{
+    background-color: {COLOR_BG}; color: {COLOR_TEXT_TITLE};
+    border: 1px solid {COLOR_BORDER}; border-radius: 7px;
+    padding: 7px 10px; selection-background-color: {COLOR_PRIMARY}; selection-color: white;
+}}
+QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QSpinBox:focus,
+QDoubleSpinBox:focus, QTextEdit:focus, QPlainTextEdit:focus {{ border: 2px solid {COLOR_INFO}; }}
+QLineEdit:disabled, QComboBox:disabled, QDateEdit:disabled, QSpinBox:disabled,
+QDoubleSpinBox:disabled, QTextEdit:disabled, QPlainTextEdit:disabled {{
+    background-color: {COLOR_SURFACE}; color: {COLOR_TEXT_MUTED};
+}}
+QComboBox::drop-down {{ border: none; width: 25px; }}
+QComboBox QAbstractItemView {{ background-color: {COLOR_SURFACE}; color: {COLOR_TEXT_TITLE};
+    selection-background-color: {COLOR_PRIMARY}; selection-color: white; border: 1px solid {COLOR_BORDER}; }}
+QCalendarWidget QAbstractItemView {{ background-color: {COLOR_BG}; color: {COLOR_TEXT_MAIN}; selection-background-color: {COLOR_PRIMARY}; }}
+QPushButton {{ background-color: {COLOR_SURFACE_HOVER}; color: {COLOR_TEXT_TITLE};
+    border: 1px solid {COLOR_BORDER}; border-radius: 7px; padding: 7px 12px; font-weight: 700; }}
+QPushButton:hover {{ background-color: #34455e; border-color: {COLOR_INFO}; }}
+QPushButton:focus {{ border: 2px solid {COLOR_INFO}; }}
+QPushButton:disabled {{ background-color: {COLOR_BORDER}; color: {COLOR_TEXT_MUTED}; border-color: {COLOR_BORDER}; }}
+QPushButton#Primary {{ background-color: {COLOR_PRIMARY}; border-color: {COLOR_PRIMARY}; color: white; }}
+QPushButton#Primary:hover {{ background-color: {COLOR_PRIMARY_HOVER}; }}
+QPushButton#Success {{ background-color: {COLOR_SUCCESS}; border-color: {COLOR_SUCCESS}; color: white; }}
+QPushButton#Success:hover {{ background-color: {COLOR_SUCCESS_HOVER}; }}
+QPushButton#Danger {{ background-color: {COLOR_DANGER}; border-color: {COLOR_DANGER}; color: white; }}
+QPushButton#Danger:hover {{ background-color: {COLOR_DANGER_HOVER}; }}
+QPushButton#Warning {{ background-color: {COLOR_WARNING}; border-color: {COLOR_WARNING}; color: white; }}
+QPushButton#Warning:hover {{ background-color: {COLOR_WARNING_HOVER}; }}
+QPushButton#Outline, QPushButton#FilterChip {{ background-color: transparent; color: {COLOR_TEXT_MAIN}; border: 1px solid {COLOR_BORDER}; }}
+QPushButton#Outline:hover, QPushButton#FilterChip:hover {{ background-color: {COLOR_SURFACE_HOVER}; border-color: {COLOR_INFO}; }}
+QPushButton#FilterChip:checked {{ background-color: {COLOR_PRIMARY}; border-color: {COLOR_PRIMARY}; color: white; }}
+QCheckBox {{ spacing: 8px; color: {COLOR_TEXT_MAIN}; }}
+QCheckBox::indicator {{ width: 17px; height: 17px; border: 1px solid {COLOR_TEXT_MUTED}; border-radius: 4px; }}
+QCheckBox::indicator:checked {{ background-color: {COLOR_PRIMARY}; border-color: {COLOR_PRIMARY}; }}
+QTableWidget {{ background-color: {COLOR_SURFACE}; alternate-background-color: #19263a;
+    border: 1px solid {COLOR_BORDER}; border-radius: 8px; gridline-color: transparent; }}
+QTableWidget::item {{ padding: 5px 8px; border: none; }}
+QTableWidget::item:selected {{ background-color: #284b72; color: white; }}
+QHeaderView::section {{ background-color: {COLOR_BG}; color: {COLOR_TEXT_MUTED}; font-size: 10pt;
+    font-weight: 700; padding: 9px 7px; border: none; border-bottom: 1px solid {COLOR_BORDER}; }}
+QScrollBar:vertical {{ background: {COLOR_BG}; width: 9px; border: none; }}
+QScrollBar:horizontal {{ background: {COLOR_BG}; height: 9px; border: none; }}
+QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{ background: #475569; border-radius: 4px; min-height: 22px; min-width: 22px; }}
+QScrollBar::add-line, QScrollBar::sub-line {{ border: none; background: none; }}
+QTabWidget::pane {{ border: 1px solid {COLOR_BORDER}; background: {COLOR_SURFACE}; }}
+QTabBar::tab {{ background: {COLOR_BG}; color: {COLOR_TEXT_MUTED}; padding: 8px 14px; }}
+QTabBar::tab:selected {{ background: {COLOR_SURFACE}; color: {COLOR_TEXT_TITLE}; border-bottom: 2px solid {COLOR_INFO}; }}
+QProgressBar {{ background-color: {COLOR_BORDER}; border: none; border-radius: 3px; }}
+QProgressBar::chunk {{ background-color: {COLOR_INFO}; border-radius: 3px; }}
+QToolTip {{ background-color: {COLOR_SURFACE}; color: {COLOR_TEXT_TITLE}; border: 1px solid {COLOR_BORDER}; padding: 6px; }}
+"""
 
-/* الكروت والحاويات */
-QFrame#Card {{
-    background-color: {COLOR_SURFACE};
-    border-radius: 12px;
-    border: 1px solid {COLOR_BORDER};
-}}
-
-/* حقول الإدخال والقوائم والتقويم */
-QLineEdit, QComboBox, QDateEdit {{
-    padding: 8px 14px;
-    border: 1px solid {COLOR_BORDER};
-    border-radius: 8px;
-    background-color: {COLOR_BG};
-    color: {COLOR_TEXT_TITLE};
-    font-weight: bold;
-    selection-background-color: {COLOR_PRIMARY};
-}}
-QLineEdit:focus, QComboBox:focus, QDateEdit:focus {{
-    border: 1.5px solid {COLOR_BORDER_FOCUS};
-    background-color: {COLOR_SURFACE};
-}}
-QComboBox::drop-down {{ border: none; width: 28px; }}
-QComboBox QAbstractItemView {{
-    border: 1px solid {COLOR_BORDER};
-    border-radius: 6px;
-    background-color: {COLOR_SURFACE};
-    selection-background-color: {COLOR_PRIMARY};
-    selection-color: #ffffff;
-    color: {COLOR_TEXT_TITLE};
-}}
-
-/* الأزرار العصرية واللمسية (Tactile Buttons) */
-QPushButton {{
-    font-family: 'Cairo';
-    font-weight: 700;
-    border-radius: 8px;
-    padding: 8px 16px;
-    color: #ffffff;
-    border: none;
-}}
-QPushButton:hover {{
-    background-color: {COLOR_SURFACE_HOVER};
-}}
-QPushButton:pressed {{
-    background-color: #172333;
-}}
-
-QPushButton#Primary {{
-    background-color: {COLOR_PRIMARY};
-}}
-QPushButton#Primary:hover {{
-    background-color: {COLOR_PRIMARY_HOVER};
-}}
-QPushButton#Primary:pressed {{
-    background-color: {COLOR_PRIMARY_PRESSED};
-}}
-
-QPushButton#Success {{
-    background-color: {COLOR_SUCCESS};
-}}
-QPushButton#Success:hover {{
-    background-color: {COLOR_SUCCESS_HOVER};
-}}
-QPushButton#Success:pressed {{
-    background-color: {COLOR_SUCCESS_PRESSED};
-}}
-
-QPushButton#Danger {{
-    background-color: {COLOR_DANGER};
-}}
-QPushButton#Danger:hover {{
-    background-color: {COLOR_DANGER_HOVER};
-}}
-QPushButton#Danger:pressed {{
-    background-color: {COLOR_DANGER_PRESSED};
-}}
-
-QPushButton#Warning {{
-    background-color: {COLOR_WARNING};
-    color: #ffffff;
-}}
-QPushButton#Warning:hover {{
-    background-color: {COLOR_WARNING_HOVER};
-}}
-QPushButton#Warning:pressed {{
-    background-color: {COLOR_WARNING_PRESSED};
-}}
-
-QPushButton#Outline {{
-    background-color: transparent;
-    border: 1px solid {COLOR_BORDER};
-    color: {COLOR_TEXT_MUTED};
-}}
-QPushButton#Outline:hover {{
-    border-color: #475569;
-    background-color: {COLOR_SURFACE};
-    color: {COLOR_TEXT_MAIN};
-}}
-QPushButton#Outline:pressed {{
-    background-color: {COLOR_BG};
-    border-color: {COLOR_BORDER};
-}}
-
-/* الجداول الاحترافية */
-QTableWidget {{
-    background-color: {COLOR_SURFACE};
-    border: 1px solid {COLOR_BORDER};
-    border-radius: 12px;
-    gridline-color: transparent;
-    outline: none;
-    color: {COLOR_TEXT_MAIN};
-}}
-QTableWidget::item {{
-    border-bottom: 1px solid #283548;
-    padding: 6px 8px;
-}}
-QTableWidget::item:selected {{
-    background-color: {COLOR_SURFACE_HOVER};
-    color: #ffffff;
-}}
-QHeaderView::section {{
-    background-color: {COLOR_BG};
-    color: {COLOR_TEXT_MUTED};
-    font-weight: 800;
-    font-size: 12px;
-    padding: 12px 10px;
-    border: none;
-    border-bottom: 2px solid {COLOR_BORDER};
-}}
-
-/* شريط التمرير (Scrollbar) */
-QScrollBar:vertical {{
-    border: none;
-    background: {COLOR_BG};
-    width: 8px;
-    border-radius: 4px;
-}}
-QScrollBar::handle:vertical {{
-    background: #334155;
-    min-height: 24px;
-    border-radius: 4px;
-}}
-QScrollBar::handle:vertical:hover {{
-    background: #475569;
-}}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-    border: none;
-    background: none;
-}}
+LOGIN_STYLESHEET = STYLESHEET + f"""
+QWidget#LoginWindow {{ background-color: {COLOR_BG}; }}
+QFrame#LoginCard {{ background-color: {COLOR_SURFACE}; border: 1px solid {COLOR_BORDER}; border-radius: 16px; }}
+QLabel#LoginBrand {{ color: {COLOR_INFO_MUTED}; font-size: 13pt; font-weight: 700; }}
+QLabel#LoginTitle {{ color: {COLOR_TEXT_TITLE}; font-size: 20pt; font-weight: 700; }}
+QLabel#LoginSubtitle, QLabel#LoginFooter {{ color: {COLOR_TEXT_MUTED}; font-size: 9pt; }}
+QLabel#LoginFieldLabel {{ color: {COLOR_TEXT_MAIN}; font-size: 10pt; font-weight: 700; }}
+QLabel#LoginMark {{ color: {COLOR_INFO}; font-size: 30pt; }}
+QPushButton#PrimaryButton {{ background-color: {COLOR_PRIMARY}; color: white; border: none; border-radius: 8px; font-weight: 700; }}
+QPushButton#PrimaryButton:hover {{ background-color: {COLOR_PRIMARY_HOVER}; }}
+QPushButton#PrimaryButton:disabled {{ background-color: {COLOR_BORDER}; color: {COLOR_TEXT_MUTED}; }}
+QToolButton {{ background: transparent; color: {COLOR_TEXT_MAIN}; border: none; padding: 7px; }}
+QToolButton:hover {{ background-color: {COLOR_SURFACE_HOVER}; }}
 """
