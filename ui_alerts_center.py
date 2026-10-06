@@ -23,43 +23,14 @@ class AlertsCenterWindow(QDialog):
         self.setWindowTitle("مركز التنبيهات الذكية 🔔 | ARN Alerts Center")
         self.resize(1150, 720)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
-        self.setStyleSheet("""
-            QDialog { background-color: #0f172a; }
-            QFrame#StatCard {
-                background-color: #1e293b;
-                border: 1px solid #334155;
-                border-radius: 10px;
-                padding: 10px 16px;
-            }
-            QLabel { color: #e2e8f0; font-family: 'Cairo'; }
-            QPushButton {
-                font-family: 'Cairo'; font-size: 10pt; font-weight: bold;
-                border-radius: 6px; padding: 7px 16px;
-            }
-            QTableWidget {
-                background-color: #1e293b;
-                border: 1px solid #334155;
-                gridline-color: #334155;
-                color: #f8fafc;
-                font-family: 'Cairo';
-                border-radius: 8px;
-            }
-            QHeaderView::section {
-                background-color: #0f172a;
-                color: #94a3b8;
-                font-weight: bold;
-                padding: 6px;
-                border: 1px solid #334155;
-            }
-        """)
 
         self.init_ui()
         self.refresh_alerts()
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(16, 16, 16, 16)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(24, 20, 24, 20)
+        main_layout.setSpacing(16)
 
         # 1. شريط العنوان
         header_layout = QHBoxLayout()
@@ -70,12 +41,12 @@ class AlertsCenterWindow(QDialog):
         header_layout.addStretch()
 
         btn_rules = QPushButton("إدارة القواعد ⚙️")
-        btn_rules.setStyleSheet("background-color: #334155; color: white;")
+        btn_rules.setObjectName("Outline")
         btn_rules.clicked.connect(self.open_rules_dialog)
         header_layout.addWidget(btn_rules)
 
         btn_refresh = QPushButton("تحديث 🔄")
-        btn_refresh.setStyleSheet("background-color: #3b82f6; color: white;")
+        btn_refresh.setObjectName("Primary")
         btn_refresh.clicked.connect(self.refresh_alerts)
         header_layout.addWidget(btn_refresh)
 
@@ -105,11 +76,8 @@ class AlertsCenterWindow(QDialog):
             btn = QPushButton(text)
             btn.setCheckable(True)
             btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-            if key == "ALL":
-                btn.setChecked(True)
-                btn.setStyleSheet("background-color: #3b82f6; color: white;")
-            else:
-                btn.setStyleSheet("background-color: #1e293b; color: #94a3b8; border: 1px solid #334155;")
+            btn.setObjectName("FilterChip")
+            btn.setChecked(key == "ALL")
             btn.clicked.connect(lambda checked, k=key: self.set_filter(k))
             self.filter_buttons[key] = btn
             filter_bar.addWidget(btn)
@@ -117,7 +85,7 @@ class AlertsCenterWindow(QDialog):
         filter_bar.addStretch()
 
         self.btn_mark_all = QPushButton("تعليم الكل كمقروء ✓")
-        self.btn_mark_all.setStyleSheet("background-color: #475569; color: white; font-size: 9pt;")
+        self.btn_mark_all.setObjectName("Outline")
         self.btn_mark_all.clicked.connect(self.mark_all_read)
         filter_bar.addWidget(self.btn_mark_all)
 
@@ -125,6 +93,7 @@ class AlertsCenterWindow(QDialog):
 
         # 4. جدول التنبيهات
         self.table = QTableWidget()
+        self.table.setAlternatingRowColors(True)
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
             "ID", "الوقت", "الخطورة", "الهدف", "نص التنبيه", "الحالة", "إجراء"
@@ -138,11 +107,11 @@ class AlertsCenterWindow(QDialog):
         # 5. الشريط السفلي
         bottom_layout = QHBoxLayout()
         btn_export = QPushButton("تصدير تقرير PDF 📄")
-        btn_export.setStyleSheet("background-color: #10b981; color: white;")
+        btn_export.setObjectName("Success")
         btn_export.clicked.connect(self.export_pdf)
 
         btn_close = QPushButton("إغلاق ❌")
-        btn_close.setStyleSheet("background-color: #334155; color: white;")
+        btn_close.setObjectName("Outline")
         btn_close.clicked.connect(self.close)
 
         bottom_layout.addWidget(btn_export)
@@ -170,12 +139,7 @@ class AlertsCenterWindow(QDialog):
     def set_filter(self, filter_key):
         self.current_filter = filter_key
         for k, b in self.filter_buttons.items():
-            if k == filter_key:
-                b.setChecked(True)
-                b.setStyleSheet("background-color: #3b82f6; color: white;")
-            else:
-                b.setChecked(False)
-                b.setStyleSheet("background-color: #1e293b; color: #94a3b8; border: 1px solid #334155;")
+            b.setChecked(k == filter_key)
         self.refresh_alerts()
 
     def open_rules_dialog(self):
@@ -227,7 +191,7 @@ class AlertsCenterWindow(QDialog):
             if not a.get('is_resolved'):
                 btn_resolve = QPushButton("حل ✅")
                 btn_resolve.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-                btn_resolve.setStyleSheet("background-color: #10b981; color: white; padding: 3px 8px; font-size: 9pt;")
+                btn_resolve.setObjectName("Success")
                 btn_resolve.clicked.connect(lambda ch, aid=a['id']: self.resolve_alert(aid))
                 self.table.setCellWidget(i, 6, btn_resolve)
             else:

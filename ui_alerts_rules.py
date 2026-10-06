@@ -20,37 +20,14 @@ class AlertRulesDialog(QDialog):
         self.setWindowTitle("إدارة قواعد التنبيهات الذكية ⚙️ | ARN Alerts Rules")
         self.resize(950, 560)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
-        self.setStyleSheet("""
-            QDialog { background-color: #0f172a; }
-            QLabel { color: #e2e8f0; font-family: 'Cairo'; }
-            QPushButton {
-                font-family: 'Cairo'; font-size: 10pt; font-weight: bold;
-                border-radius: 6px; padding: 8px 16px;
-            }
-            QTableWidget {
-                background-color: #1e293b;
-                border: 1px solid #334155;
-                gridline-color: #334155;
-                color: #f8fafc;
-                font-family: 'Cairo';
-                border-radius: 8px;
-            }
-            QHeaderView::section {
-                background-color: #0f172a;
-                color: #94a3b8;
-                font-weight: bold;
-                padding: 6px;
-                border: 1px solid #334155;
-            }
-        """)
 
         self.init_ui()
         self.load_rules()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(16)
 
         # عنوان
         title_lbl = QLabel("⚙️ ضبط القواعد الحسابية للتنبيهات الذكية")
@@ -64,6 +41,7 @@ class AlertRulesDialog(QDialog):
 
         # جدول القواعد
         self.table = QTableWidget()
+        self.table.setAlternatingRowColors(True)
         self.table.setColumnCount(8)
         self.table.setHorizontalHeaderLabels([
             "كود القاعدة", "الاسم والوصف", "التصنيف", "القيمة الحدية", "مستوى الخطورة", "التهدئة (ساعة)", "مفعلة؟", "صوت؟"
@@ -76,11 +54,11 @@ class AlertRulesDialog(QDialog):
         # أزرار الحفظ
         btn_bar = QHBoxLayout()
         btn_save = QPushButton("حفظ التعديلات 💾")
-        btn_save.setStyleSheet("background-color: #10b981; color: white;")
+        btn_save.setObjectName("Success")
         btn_save.clicked.connect(self.save_rules)
 
         btn_close = QPushButton("إغلاق ❌")
-        btn_close.setStyleSheet("background-color: #334155; color: white;")
+        btn_close.setObjectName("Outline")
         btn_close.clicked.connect(self.close)
 
         btn_bar.addWidget(btn_save)
@@ -114,7 +92,7 @@ class AlertRulesDialog(QDialog):
             spin_thresh = QDoubleSpinBox()
             spin_thresh.setRange(0.1, 100000.0)
             spin_thresh.setValue(float(r.get('threshold_value') or 0.0))
-            spin_thresh.setStyleSheet("background-color: #0f172a; color: white; border: 1px solid #334155; padding: 4px;")
+
             self.table.setCellWidget(i, 3, spin_thresh)
 
             # الخطورة
@@ -122,14 +100,14 @@ class AlertRulesDialog(QDialog):
             for s in ["CRITICAL", "WARNING", "INFO"]:
                 combo_sev.addItem(s)
             combo_sev.setCurrentText(r.get('severity', 'WARNING'))
-            combo_sev.setStyleSheet("background-color: #0f172a; color: white; border: 1px solid #334155; padding: 4px;")
+
             self.table.setCellWidget(i, 4, combo_sev)
 
             # فترة التهدئة (ساعات)
             spin_cool = QSpinBox()
             spin_cool.setRange(1, 720)
             spin_cool.setValue(int(r.get('cooldown_hours') or 24))
-            spin_cool.setStyleSheet("background-color: #0f172a; color: white; border: 1px solid #334155; padding: 4px;")
+
             self.table.setCellWidget(i, 5, spin_cool)
 
             # تفعيل

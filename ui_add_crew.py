@@ -17,33 +17,6 @@ class AddCrewWindow(QDialog):
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowMinMaxButtonsHint | Qt.WindowType.WindowCloseButtonHint)
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #0f172a;
-            }
-            QFrame#Card {
-                background-color: #1e293b;
-                border-radius: 14px;
-                border: 1px solid #334155;
-            }
-            QLabel {
-                color: #e2e8f0;
-                font-family: 'Cairo';
-            }
-            QLineEdit, QComboBox, QDateEdit {
-                background-color: #0f172a;
-                border: 1px solid #334155;
-                border-radius: 8px;
-                padding: 8px 12px;
-                color: #f8fafc;
-                font-size: 11pt;
-                font-family: 'Cairo';
-                font-weight: bold;
-            }
-            QLineEdit:focus, QComboBox:focus, QDateEdit:focus {
-                border-color: #3b82f6;
-            }
-        """)
         
         self.build_ui()
 

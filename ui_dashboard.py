@@ -31,198 +31,8 @@ import os
 # ============================================================
 # 1. محرك الحسابات (منطق الأعمال)
 # ============================================================
-class PayrollEngine:
-    """يتولى جميع عمليات الحساب وجلب البيانات من قاعدة البيانات"""
-
-    def __init__(self, db_path='arn_ship_payroll.db'):
-        self.db_path = db_path
-
-    def get_system_info(self):
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                data = conn.execute(
-                    "SELECT company_name, vessel_name FROM system_settings WHERE id=1"
-                ).fetchone()
-            if data and len(data) == 2:
-                return f"{data[1]} - {data[0]}"
-            return "ARN Fleet - النظام المحاسبي"
-        except sqlite3.Error:
-            return "ARN Fleet - النظام المحاسبي"
-
-    def load_crew_data(self, year, month, calc_mode):
-        crew_data = []
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-
-                crew_members = cursor.execute(
-                    "SELECT * FROM CrewWages"
-                ).fetchall()
-
-                # 1. ترتيب البحارة بحسب الهيكل الوظيفي للرتب
-                def rank_sort_key(m):
-                    r_str = dict(m).get('Rank', '')
-                    no_val = dict(m).get('No', 0)
-                    return (get_rank_sort_key(r_str), no_val)
-
-                crew_members = sorted(crew_members, key=rank_sort_key)
-
-                # 2. إحصاء تكرار كل رتبة لترقيمها تلقائياً (مثال: MASTER 1, MASTER 2)
-                from collections import Counter
-                base_rank_counts = Counter(get_base_rank(dict(m).get('Rank', '')) for m in crew_members)
-                base_rank_current_index = {}
-
-                all_history = cursor.execute(
-                    "SELECT * FROM payroll_history"
-                ).fetchall()
-
-                history_by_crew = {}
-                for h in all_history:
-                    cid = h['crew_id']
-                    history_by_crew.setdefault(cid, []).append(dict(h))
-
-                today = datetime.now()
-                today_str = today.strftime("%Y-%m-%d")
-                real_year, real_month = today.year, today.month
-
-                selected_month_start = f"{year}-{month:02d}-01"
-                last_day = calendar.monthrange(year, month)[1]
-                selected_month_end = f"{year}-{month:02d}-{last_day:02d}"
-                dt_selected_start = datetime.strptime(selected_month_start, "%Y-%m-%d")
-                prev_month_end = (dt_selected_start - relativedelta(days=1)).strftime("%Y-%m-%d")
-
-                if calc_mode == "today" and month == real_month and year == real_year:
-                    cap_date = today_str
-                else:
-                    cap_date = selected_month_end
-
-                for member in crew_members:
-                    mem = dict(member)
-                    crew_id = mem['No']
-                    name = mem['Name']
-                    raw_rank = mem['Rank'] or ''
-                    base_rank = get_base_rank(raw_rank)
-
-                    total_with_rank = base_rank_counts[base_rank]
-                    if total_with_rank > 1:
-                        base_rank_current_index[base_rank] = base_rank_current_index.get(base_rank, 0) + 1
-                        rank_display = f"{base_rank} {base_rank_current_index[base_rank]}"
-                    else:
-                        rank_display = base_rank if base_rank != 'OTHER' else (raw_rank or 'OTHER')
-
-                    period_from = mem['PeriodFrom'] or selected_month_start
-                    wage = float(mem['MonthlyWage'] or 0)
-                    prev_balance = float(mem['PREVIOUS'] or 0)
-                    paid_data = json.loads(mem.get('PaidMonthsData') or '{}')
-                    wage_history = json.loads(mem.get('WageHistory') or '{}')
-
-                    if period_from > selected_month_end:
-                        days_worked = 0
-                    else:
-                        days_worked = calculate_days_30(period_from, cap_date)
-
-                    paid_days_past = 0
-                    paid_days_current = 0
-                    if days_worked > 0:
-                        for m_key in paid_data.keys():
-                            try:
-                                y_num, m_num = map(int, m_key.split('-'))
-                                m_start = f"{y_num}-{m_num:02d}-01"
-                                m_last = calendar.monthrange(y_num, m_num)[1]
-                                m_end = f"{y_num}-{m_num:02d}-{m_last:02d}"
-                                actual_start = max(period_from, m_start)
-                                actual_end = min(cap_date, m_end)
-                                if actual_start <= actual_end:
-                                    days = calculate_days_30(actual_start, actual_end)
-                                    if y_num < year or (y_num == year and m_num < month):
-                                        paid_days_past += days
-                                    elif y_num == year and m_num == month:
-                                        paid_days_current += days
-                            except:
-                                continue
-
-                    days_worked_past = calculate_days_30(period_from, prev_month_end) if period_from <= prev_month_end else 0
-                    net_days_past = max(0, days_worked_past - paid_days_past)
-                    days_worked_current = max(0, days_worked - days_worked_past)
-                    net_days_current = max(0, days_worked_current - paid_days_current)
-                    net_days_total = net_days_past + net_days_current
-
-                    past_unpaid_basic = 0
-                    if period_from <= prev_month_end:
-                        curr = datetime.strptime(period_from, "%Y-%m-%d").replace(day=1)
-                        end = datetime.strptime(prev_month_end, "%Y-%m-%d").replace(day=1)
-                        while curr <= end:
-                            m_key = curr.strftime("%Y-%m")
-                            m_start = curr.strftime("%Y-%m-01")
-                            m_last = calendar.monthrange(curr.year, curr.month)[1]
-                            m_end = curr.strftime(f"%Y-%m-{m_last:02d}")
-                            actual_start = max(period_from, m_start)
-                            actual_end = min(prev_month_end, m_end)
-                            if actual_start <= actual_end:
-                                days_in_month = calculate_days_30(actual_start, actual_end)
-                                if m_key not in paid_data:
-                                    w = float(wage_history.get(m_key, wage))
-                                    past_unpaid_basic += round(days_in_month * (w / 30.0), 2)
-                            curr += relativedelta(months=1)
-
-                    wage_key = f"{year}-{month:02d}"
-                    current_wage = float(wage_history.get(wage_key, wage))
-                    current_basic = round(current_wage / 30.0 * net_days_current, 2) if net_days_current > 0 else 0.0
-
-                    past_extra = past_ded = curr_extra = curr_ded = 0.0
-                    cum_cash = cum_cig = cum_trans = 0.0
-
-                    for h in history_by_crew.get(crew_id, []):
-                        h_year, h_month = h['payroll_year'], h['payroll_month']
-                        m_key_hist = f"{h_year}-{h_month:02d}"
-                        if m_key_hist not in paid_data:
-                            if h_year == year and h_month == month:
-                                curr_extra += float(h['extra'])
-                                curr_ded += float(h['deduction'])
-                                cum_cash += float(h['payment_cash'])
-                                cum_cig += float(h['cigarette'])
-                                cum_trans += float(h['transfer'])
-                            elif h_year < year or (h_year == year and h_month < month):
-                                past_extra += float(h['extra'])
-                                past_ded += float(h['deduction'])
-                                cum_cash += float(h['payment_cash'])
-                                cum_cig += float(h['cigarette'])
-                                cum_trans += float(h['transfer'])
-
-                    total_due = round(current_basic + curr_extra + prev_balance + past_unpaid_basic + past_extra - curr_ded - past_ded, 2)
-                    total_received = round(cum_cash + cum_cig + cum_trans, 2)
-                    final_balance = round(total_due - total_received, 2)
-
-
-                    is_settled = wage_key in paid_data
-                    days_display = "مسوى ✓" if is_settled else f"{net_days_total}"
-
-                    crew_data.append({
-                        'id': crew_id,
-                        'index': len(crew_data) + 1,
-                        'name': name,
-                        'rank': rank_display,
-                        'days_display': days_display,
-                        'wage': current_wage,
-                        'curr_extra': curr_extra,
-                        'curr_ded': curr_ded,
-                        'prev_balance': prev_balance,
-                        'total_due': total_due,
-                        'cum_cash': cum_cash,
-                        'cum_cig': cum_cig,
-                        'cum_trans': cum_trans,
-                        'total_received': total_received,
-                        'final_balance': final_balance,
-                        'is_settled': is_settled,
-                        'net_days': net_days_total
-                    })
-
-            return crew_data
-
-        except sqlite3.Error as e:
-            raise Exception(f"خطأ في قاعدة البيانات: {str(e)}")
-
+from payroll_engine import PayrollEngine
+from db_safety import connect
 
 # ============================================================
 # 2. خيط تحميل البيانات
@@ -261,7 +71,7 @@ class MainDashboard(QMainWindow):
         self.system_info = self.engine.get_system_info()
 
         self.setWindowTitle(f"ARN Fleet | {self.system_info}")
-        self.setMinimumSize(1350, 850)
+        self.setMinimumSize(1000, 700)
 
         self.apply_stylesheet()
         self.build_ui()
@@ -321,8 +131,8 @@ class MainDashboard(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(24, 20, 24, 20)
+        main_layout.setSpacing(18)
 
         # ---------- الهيدر ----------
         header_layout = QHBoxLayout()
@@ -403,8 +213,10 @@ class MainDashboard(QMainWindow):
         # ---------- لوحة التحكم (كارد) ----------
         control_panel = QFrame()
         control_panel.setObjectName("Card")
-        control_layout = QHBoxLayout(control_panel)
-        control_layout.setContentsMargins(15, 10, 15, 10)
+        control_card_layout = QVBoxLayout(control_panel)
+        control_card_layout.setContentsMargins(16, 12, 16, 12)
+        control_card_layout.setSpacing(10)
+        control_layout = QHBoxLayout()
         control_layout.setSpacing(10)
 
         role = self.current_user["role"].lower()
@@ -458,7 +270,7 @@ class MainDashboard(QMainWindow):
             btn_reset.clicked.connect(self.reset_all_data)
             control_layout.addWidget(btn_reset)
 
-        control_layout.addStretch()
+        control_card_layout.addLayout(control_layout)
 
         # عناصر اختيار السنة والشهر
         lbl_year = QLabel("السنة:")
@@ -486,12 +298,16 @@ class MainDashboard(QMainWindow):
         btn_print_all.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         btn_print_all.clicked.connect(self.print_all_crew_payslips)
 
-        control_layout.addWidget(lbl_year)
-        control_layout.addWidget(self.year_entry)
-        control_layout.addWidget(lbl_month)
-        control_layout.addWidget(self.month_combo)
-        control_layout.addWidget(btn_calc_mode)
-        control_layout.addWidget(btn_print_all)
+        period_layout = QHBoxLayout()
+        period_layout.setSpacing(10)
+        period_layout.addWidget(lbl_year)
+        period_layout.addWidget(self.year_entry)
+        period_layout.addWidget(lbl_month)
+        period_layout.addWidget(self.month_combo)
+        period_layout.addStretch()
+        period_layout.addWidget(btn_calc_mode)
+        period_layout.addWidget(btn_print_all)
+        control_card_layout.addLayout(period_layout)
 
         main_layout.addWidget(control_panel)
 
@@ -537,11 +353,13 @@ class MainDashboard(QMainWindow):
 
         search_bar.addWidget(self.search_entry)
         search_bar.addWidget(self.filter_combo)
-        search_bar.addStretch()
-        search_bar.addWidget(btn_master_sheet)
-        search_bar.addWidget(btn_excel)
-
         table_layout.addLayout(search_bar)
+        export_bar = QHBoxLayout()
+        export_bar.setSpacing(10)
+        export_bar.addStretch()
+        export_bar.addWidget(btn_master_sheet)
+        export_bar.addWidget(btn_excel)
+        table_layout.addLayout(export_bar)
 
         self.table = QTableWidget()
         self.table.setColumnCount(15)
@@ -575,6 +393,11 @@ class MainDashboard(QMainWindow):
         self.table.setColumnWidth(13, 95)  # الصافي
         self.table.setColumnWidth(14, 290) # الإجراءات (يتسع لـ 4 أزرار مريحة)
 
+        self.table.setAlternatingRowColors(True)
+        self.table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.table.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.table.setShowGrid(False)
+        self.table.setWordWrap(False)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 
@@ -995,7 +818,7 @@ class MainDashboard(QMainWindow):
         )
         if reply == QMessageBox.StandardButton.Yes:
             try:
-                with sqlite3.connect('arn_ship_payroll.db') as conn:
+                with connect('arn_ship_payroll.db') as conn:
                     conn.execute("DELETE FROM CrewWages WHERE No=?", (crew_id,))
                     conn.execute("DELETE FROM payroll_history WHERE crew_id=?", (crew_id,))
                     conn.commit()
@@ -1125,7 +948,7 @@ class MainDashboard(QMainWindow):
             )
             if confirm == QMessageBox.StandardButton.Yes:
                 try:
-                    conn = sqlite3.connect('arn_ship_payroll.db')
+                    conn = connect('arn_ship_payroll.db')
                     cursor = conn.cursor()
                     cursor.execute("DELETE FROM CrewWages")
                     cursor.execute("DELETE FROM payroll_history")

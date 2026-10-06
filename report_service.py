@@ -4,6 +4,7 @@ from PyQt6.QtGui import QTextDocument, QPageSize, QPageLayout
 from PyQt6.QtPrintSupport import QPrinter
 from PyQt6.QtCore import QSizeF, QMarginsF
 import html
+from money import amount, cents
 import tempfile
 import os
 from datetime import datetime
@@ -26,9 +27,9 @@ class ReportService:
         if not isinstance(crew, dict):
             crew = {}
             
-        ui_total_due = float(crew.get('total_due', 0))
-        curr_extra = float(crew.get('curr_extra', crew.get('extra', 0)))
-        curr_ded = float(crew.get('curr_ded', crew.get('deduction', 0)))
+        ui_total_due = amount(crew.get('total_due', 0))
+        curr_extra = amount(crew.get('curr_extra', crew.get('extra', 0)))
+        curr_ded = amount(crew.get('curr_ded', crew.get('deduction', 0)))
         
         # Fetch company and vessel name if not present
         company_name = crew.get('company_name')
@@ -52,8 +53,8 @@ class ReportService:
         
         # في لوحة التحكم، total_due يتضمن المكافأة ويخصم منه الخصميات مباشرة
         # لضبط شكل الكشف (أجر الفترة + مكافآت = إجمالي المستحق)
-        period_wage = ui_total_due - curr_extra + curr_ded
-        total_earnings = period_wage + curr_extra
+        period_wage = cents(ui_total_due - curr_extra + curr_ded)
+        total_earnings = cents(period_wage + curr_extra)
         
         return {
             'company_name': str(company_name),
@@ -64,10 +65,10 @@ class ReportService:
             'year': int(crew.get('year', datetime.now().year)),
             'basic_wage': float(crew.get('basic_wage', crew.get('wage', crew.get('MonthlyWage', crew.get('monthly_wage', 0))))),
             'worked_days': float(crew.get('worked_days', crew.get('net_days', 0))),
-            'total_due': period_wage,
-            'extra': curr_extra,
-            'total_earnings': total_earnings,
-            'deduction': curr_ded,
+            'total_due': float(period_wage),
+            'extra': float(cents(curr_extra)),
+            'total_earnings': float(total_earnings),
+            'deduction': float(cents(curr_ded)),
             'payment_cash': float(crew.get('payment_cash', crew.get('cum_cash', 0))),
             'cigarette': float(crew.get('cigarette', crew.get('cum_cig', 0))),
             'transfer': float(crew.get('transfer', crew.get('cum_trans', 0))),

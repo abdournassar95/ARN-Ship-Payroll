@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QColor, QCursor
 from auth_service import AuthService
+from db_safety import backup_database, restore_database, validate_backup
 
 class AdminWindow(QDialog):
     def __init__(self, parent=None):
@@ -98,19 +99,19 @@ class AdminWindow(QDialog):
         btn_row = QHBoxLayout()
         btn_audit_log = QPushButton("📋 فتح سجل التدقيق")
         btn_audit_log.setFont(QFont("Cairo", 10, QFont.Weight.Bold))
-        btn_audit_log.setStyleSheet("background-color: #1e293b; color: #10b981; border: 1px solid #10b981; border-radius: 6px; padding: 7px 14px;")
+        btn_audit_log.setObjectName("Outline")
         btn_audit_log.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         btn_audit_log.clicked.connect(self.open_audit_log_win)
 
         btn_rules = QPushButton("⚙️ ضبط قواعد التنبيهات")
         btn_rules.setFont(QFont("Cairo", 10, QFont.Weight.Bold))
-        btn_rules.setStyleSheet("background-color: #1e293b; color: #f59e0b; border: 1px solid #f59e0b; border-radius: 6px; padding: 7px 14px;")
+        btn_rules.setObjectName("Outline")
         btn_rules.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         btn_rules.clicked.connect(self.open_rules_win)
 
         btn_center = QPushButton("🔔 مركز التنبيهات")
         btn_center.setFont(QFont("Cairo", 10, QFont.Weight.Bold))
-        btn_center.setStyleSheet("background-color: #1e293b; color: #38bdf8; border: 1px solid #38bdf8; border-radius: 6px; padding: 7px 14px;")
+        btn_center.setObjectName("Outline")
         btn_center.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         btn_center.clicked.connect(self.open_center_win)
 
@@ -139,13 +140,13 @@ class AdminWindow(QDialog):
         bk_btns_row = QHBoxLayout()
         btn_create_backup = QPushButton("📦  إنشاء نسخة احتياطية الآن (Backup Now)")
         btn_create_backup.setFont(QFont("Cairo", 10, QFont.Weight.Bold))
-        btn_create_backup.setStyleSheet("background-color: #1e293b; color: #a78bfa; border: 1px solid #a78bfa; border-radius: 6px; padding: 7px 16px;")
+        btn_create_backup.setObjectName("Outline")
         btn_create_backup.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         btn_create_backup.clicked.connect(self.create_backup)
 
         btn_restore_backup = QPushButton("🔄  استعادة نسخة احتياطية (Restore)")
         btn_restore_backup.setFont(QFont("Cairo", 10, QFont.Weight.Bold))
-        btn_restore_backup.setStyleSheet("background-color: #1e293b; color: #f43f5e; border: 1px solid #f43f5e; border-radius: 6px; padding: 7px 16px;")
+        btn_restore_backup.setObjectName("Danger")
         btn_restore_backup.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         btn_restore_backup.clicked.connect(self.restore_backup)
 
@@ -181,6 +182,7 @@ class AdminWindow(QDialog):
         card2_layout.addLayout(header2_layout)
 
         self.table = QTableWidget()
+        self.table.setAlternatingRowColors(True)
         self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels(["الاسم الكامل", "اسم المستخدم", "الصلاحية", "الإجراءات"])
         self.table.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
@@ -607,7 +609,7 @@ class AdminWindow(QDialog):
             return
 
         try:
-            shutil.copy2(db_path, file_path)
+            backup_database(db_path, file_path)
             if os.path.getsize(file_path) == 0:
                 raise RuntimeError("فشل النسخ، حجم الملف الناتج 0 بايت.")
 
@@ -640,16 +642,7 @@ class AdminWindow(QDialog):
 
         # 1. فحص سلامة الملف المختار
         try:
-            with sqlite3.connect(file_path) as conn:
-                check_result = conn.execute("PRAGMA integrity_check").fetchone()
-                if not check_result or check_result[0].lower() != "ok":
-                    raise ValueError(f"فشل فحص سلامة قاعدة البيانات: {check_result}")
-
-                tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
-                required_tables = ['users', 'CrewWages', 'payroll_history']
-                for req in required_tables:
-                    if req not in tables:
-                        raise ValueError(f"الملف المحدد لا يحتوي على جدول أساسي: {req}")
+            validate_backup(file_path)
 
         except Exception as e:
             QMessageBox.critical(
@@ -673,11 +666,7 @@ class AdminWindow(QDialog):
 
         try:
             db_path = 'arn_ship_payroll.db'
-            safety_copy = db_path + ".before_restore"
-            if os.path.exists(db_path):
-                shutil.copy2(db_path, safety_copy)
-
-            shutil.copy2(file_path, db_path)
+            restore_database(file_path, db_path)
 
             try:
                 from audit_service import AuditService

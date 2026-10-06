@@ -216,8 +216,8 @@ class AnalyticsWindow(QDialog):
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(24, 20, 24, 20)
+        main_layout.setSpacing(18)
 
         # 1. شريط التحكم العلوي
         top_frame = QFrame()

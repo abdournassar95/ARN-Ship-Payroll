@@ -61,3 +61,13 @@ class TestMaritimeCalendar30:
         assert calculate_days_30("invalid-date", "2026-01-01") == 0
         # تاريخ النهاية قبل البداية
         assert calculate_days_30("2026-05-20", "2026-05-10") == 0
+
+@pytest.mark.unit
+@pytest.mark.parametrize('start,end,expected', [
+    ('2026-09-12', '2026-09-12', 1),
+    ('2026-09-12', '2026-09-20', 9),
+    ('2026-02-01', '2026-02-28', 30),
+    ('2026-01-15', '2026-02-28', 46),
+])
+def test_inclusive_contract_dates(start, end, expected):
+    assert calculate_days_30(start, end) == expected

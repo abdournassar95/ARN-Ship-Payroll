@@ -4,20 +4,21 @@ import json
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QCheckBox, QMessageBox, QFrame, QProgressBar,
-    QToolButton, QGraphicsDropShadowEffect
+    QToolButton, QGraphicsDropShadowEffect, QDialog, QDialogButtonBox, QFormLayout
 )
 from PyQt6.QtCore import Qt, QPoint, QTimer
 from PyQt6.QtGui import QFont, QColor, QCursor
 
 from auth_service import AuthService
+import config
 
 class LoginWindow(QWidget):
     def __init__(self):
         super().__init__()
         # إزالة إطار النظام لعنوان مخصص
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(480, 620)
+        self.setObjectName("LoginWindow")
+        self.setFixedSize(480, 650)
         
         self.prefs_file = "login_prefs.json"
         self.auth_service = AuthService()
@@ -56,23 +57,23 @@ class LoginWindow(QWidget):
     def init_ui(self):
         # الحاوية الرئيسية
         main_container = QVBoxLayout(self)
-        main_container.setContentsMargins(30, 30, 30, 40)
+        main_container.setContentsMargins(24, 24, 24, 24)
 
         # البطاقة الزجاجية
         self.card = QFrame()
-        self.card.setObjectName("GlassCard")
+        self.card.setObjectName("LoginCard")
         
         # ✅ إضافة الظل بالطريقة الصحيحة (بدلاً من box-shadow في QSS)
         shadow = QGraphicsDropShadowEffect(self.card)
         shadow.setBlurRadius(20)
         shadow.setXOffset(0)
         shadow.setYOffset(10)
-        shadow.setColor(QColor(0, 0, 0, 80))  # ظل أسود شفاف
+        shadow.setColor(QColor(0, 0, 0, 45))  # ظل أسود شفاف
         self.card.setGraphicsEffect(shadow)
         
         card_layout = QVBoxLayout(self.card)
-        card_layout.setContentsMargins(25, 20, 25, 30)
-        card_layout.setSpacing(10)
+        card_layout.setContentsMargins(30, 24, 30, 28)
+        card_layout.setSpacing(12)
 
         # ---- شريط العنوان المخصص ----
         title_bar = QHBoxLayout()
@@ -80,18 +81,18 @@ class LoginWindow(QWidget):
         
         app_title = QLabel("⚓ ARN Fleet")
         app_title.setFont(QFont("Cairo", 11, QFont.Weight.Bold))
-        app_title.setStyleSheet("color: #0f172a;")
+        app_title.setObjectName("LoginBrand")
         
         btn_minimize = QToolButton()
         btn_minimize.setText("─")
         btn_minimize.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        btn_minimize.setStyleSheet("QToolButton { background: transparent; font-size: 16px; padding: 5px; }")
+        btn_minimize.setAccessibleName("تصغير النافذة")
         btn_minimize.clicked.connect(self.showMinimized)
         
         btn_close = QToolButton()
         btn_close.setText("✕")
         btn_close.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        btn_close.setStyleSheet("QToolButton { background: transparent; font-size: 16px; padding: 5px; color: #ef4444; }")
+        btn_close.setAccessibleName("إغلاق النافذة")
         btn_close.clicked.connect(self.close)
 
         title_bar.addWidget(app_title)
@@ -103,14 +104,15 @@ class LoginWindow(QWidget):
         # فاصل
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
-        line.setStyleSheet("background-color: #e2e8f0; max-height: 1px;")
+        line.setStyleSheet(f"background-color: {config.COLOR_BORDER}; max-height: 1px;")
         card_layout.addWidget(line)
 
         card_layout.addSpacing(5)
 
         # الشعار
-        logo = QLabel("🔐")
-        logo.setFont(QFont("Arial", 45))
+        logo = QLabel("⚓")
+        logo.setObjectName("LoginMark")
+        logo.setFont(QFont("Arial", 38))
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_layout.addWidget(logo)
 
@@ -118,32 +120,40 @@ class LoginWindow(QWidget):
         title = QLabel("تسجيل الدخول")
         title.setFont(QFont("Cairo", 18, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("color: #0f172a;")
+        title.setObjectName("LoginTitle")
         card_layout.addWidget(title)
 
         subtitle = QLabel("أدخل بياناتك للوصول إلى لوحة القيادة")
         subtitle.setFont(QFont("Cairo", 9))
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle.setStyleSheet("color: #64748b; margin-bottom: 10px;")
+        subtitle.setObjectName("LoginSubtitle")
         card_layout.addWidget(subtitle)
 
         # ---- حقل اسم المستخدم ----
+        username_label = QLabel("اسم المستخدم")
+        username_label.setObjectName("LoginFieldLabel")
+        card_layout.addWidget(username_label)
         self.username_entry = QLineEdit()
-        self.username_entry.setPlaceholderText("👤  اسم المستخدم")
+        self.username_entry.setPlaceholderText("أدخل اسم المستخدم")
+        self.username_entry.setAccessibleName("اسم المستخدم")
         self.username_entry.setMinimumHeight(42)
         card_layout.addWidget(self.username_entry)
 
         # ---- حقل كلمة المرور ----
+        password_label = QLabel("كلمة المرور")
+        password_label.setObjectName("LoginFieldLabel")
+        card_layout.addWidget(password_label)
         pwd_layout = QHBoxLayout()
         self.password_entry = QLineEdit()
-        self.password_entry.setPlaceholderText("🔑  كلمة المرور")
+        self.password_entry.setPlaceholderText("أدخل كلمة المرور")
+        self.password_entry.setAccessibleName("كلمة المرور")
         self.password_entry.setEchoMode(QLineEdit.EchoMode.Password)
         self.password_entry.setMinimumHeight(42)
 
         self.toggle_pwd_btn = QToolButton()
         self.toggle_pwd_btn.setText("👁")
         self.toggle_pwd_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        self.toggle_pwd_btn.setStyleSheet("QToolButton { border: none; padding: 0px 10px; background: transparent; }")
+        self.toggle_pwd_btn.setAccessibleName("إظهار أو إخفاء كلمة المرور")
         self.toggle_pwd_btn.clicked.connect(self.toggle_password_visibility)
 
         pwd_layout.addWidget(self.password_entry)
@@ -176,17 +186,6 @@ class LoginWindow(QWidget):
         self.progress_bar.setRange(0, 0)
         self.progress_bar.setTextVisible(False)
         self.progress_bar.setFixedHeight(3)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                border: none;
-                background-color: rgba(0,0,0,0.05);
-                border-radius: 2px;
-            }
-            QProgressBar::chunk {
-                background-color: #38bdf8;
-                border-radius: 2px;
-            }
-        """)
         self.progress_bar.hide()
         card_layout.addWidget(self.progress_bar)
 
@@ -200,67 +199,11 @@ class LoginWindow(QWidget):
         footer = QLabel("Developed by Abdou Ragab Nassar © 2026")
         footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
         footer.setFont(QFont("Cairo", 8))
-        footer.setStyleSheet("color: #94a3b8; margin-top: 5px;")
+        footer.setObjectName("LoginFooter")
         main_container.addWidget(footer)
 
     def apply_stylesheet(self):
-        # ✅ تم حذف خاصية box-shadow نهائياً من هنا
-        self.setStyleSheet("""
-            QWidget {
-                background: transparent;
-                font-family: 'Cairo';
-            }
-            QFrame#GlassCard {
-                background-color: rgba(255, 255, 255, 210);
-                border-radius: 24px;
-                border: 1px solid rgba(255, 255, 255, 0.6);
-            }
-            QLineEdit {
-                background-color: rgba(255, 255, 255, 0.9);
-                border: 1.5px solid #e2e8f0;
-                border-radius: 12px;
-                padding: 8px 15px;
-                font-size: 13px;
-                color: #1e293b;
-            }
-            QLineEdit:focus {
-                border: 1.5px solid #38bdf8;
-                background-color: white;
-            }
-            QCheckBox {
-                color: #475569;
-                spacing: 8px;
-            }
-            QCheckBox::indicator {
-                width: 18px;
-                height: 18px;
-                border-radius: 6px;
-                border: 1.5px solid #cbd5e1;
-                background-color: white;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #0ea5e9;
-                border: 1.5px solid #0ea5e9;
-            }
-            QPushButton#PrimaryButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                                          stop:0 #38bdf8, stop:1 #0284c7);
-                color: white;
-                border: none;
-                border-radius: 12px;
-                font-weight: bold;
-            }
-            QPushButton#PrimaryButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                                          stop:0 #0ea5e9, stop:1 #0369a1);
-            }
-            QPushButton#PrimaryButton:pressed {
-                background: #075985;
-            }
-            QPushButton#PrimaryButton:disabled {
-                background: #94a3b8;
-            }
-        """)
+        self.setStyleSheet(config.LOGIN_STYLESHEET)
 
     # ====== وظائف مساعدة ======
     def toggle_password_visibility(self):
@@ -316,6 +259,10 @@ class LoginWindow(QWidget):
         self.progress_bar.hide()
 
         if result["success"]:
+            if result["user"].get("must_change_password"):
+                if not self.require_password_change(result["user"]["id"], password):
+                    self.password_entry.clear()
+                    return
             self.save_username(username)
             self.open_dashboard(
                 result["user"]["id"],
@@ -326,6 +273,34 @@ class LoginWindow(QWidget):
             QMessageBox.critical(self, "فشل تسجيل الدخول", result["message"])
             self.password_entry.clear()
             self.password_entry.setFocus()
+
+    def require_password_change(self, user_id, old_password):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("تغيير كلمة المرور الأولية")
+        layout = QFormLayout(dialog)
+        first = QLineEdit(dialog)
+        second = QLineEdit(dialog)
+        for field in (first, second):
+            field.setEchoMode(QLineEdit.EchoMode.Password)
+        layout.addRow("كلمة مرور جديدة (12 حرفاً على الأقل):", first)
+        layout.addRow("تأكيد كلمة المرور:", second)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        layout.addRow(buttons)
+        buttons.rejected.connect(dialog.reject)
+
+        def submit():
+            if first.text() != second.text():
+                QMessageBox.warning(dialog, "تنبيه", "كلمتا المرور غير متطابقتين")
+                return
+            try:
+                self.auth_service.change_password(user_id, old_password, first.text())
+            except ValueError as error:
+                QMessageBox.warning(dialog, "تنبيه", str(error))
+                return
+            dialog.accept()
+
+        buttons.accepted.connect(submit)
+        return dialog.exec() == QDialog.DialogCode.Accepted
 
     def open_dashboard(self, user_id, full_name, role):
         try:

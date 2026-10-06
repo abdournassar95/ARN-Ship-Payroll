@@ -30,24 +30,33 @@ def get_rank_sort_key(rank_str):
         return len(RANK_HIERARCHY)
 
 def calculate_days_30(start_date_str, end_date_str):
-    """خوارزمية حساب الأيام البحرية (الشهر 30 يوماً دائمًا)"""
+    """Count both endpoints under the 30-day maritime-month convention.
+
+    A complete calendar month counts as 30 days (including February). Partial
+    months count the actual inclusive interval, treating day 31 as day 30.
+    Split multi-month intervals so a complete February is not undercounted.
+    """
     if not start_date_str or not end_date_str or start_date_str == "-" or end_date_str == "-":
         return 0
     try:
-        d1 = datetime.strptime(start_date_str, "%Y-%m-%d")
-        d2 = datetime.strptime(end_date_str, "%Y-%m-%d")
-        
-        y1, m1, day1 = d1.year, d1.month, d1.day
-        y2, m2, day2 = d2.year, d2.month, d2.day
-        
-        if day1 == 31: day1 = 30
-        if day2 == 31: day2 = 30
-        
-        _, last_day = calendar.monthrange(y2, m2)
-        if day1 == 1 and day2 == last_day:
-            return ((y2 - y1) * 12 + (m2 - m1) + 1) * 30
-            
-        days = ((y2 - y1) * 360) + ((m2 - m1) * 30) + (day2 - day1) + 1
-        return days if days > 0 else 0
-    except Exception:
+        start = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        end = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
         return 0
+    if start > end:
+        return 0
+
+    days = 0
+    year, month = start.year, start.month
+    while (year, month) <= (end.year, end.month):
+        last = calendar.monthrange(year, month)[1]
+        first_day = start.day if (year, month) == (start.year, start.month) else 1
+        last_day = end.day if (year, month) == (end.year, end.month) else last
+        if first_day == 1 and last_day == last:
+            days += 30
+        else:
+            days += max(0, min(last_day, 30) - min(first_day, 30) + 1)
+        month += 1
+        if month == 13:
+            year, month = year + 1, 1
+    return days
