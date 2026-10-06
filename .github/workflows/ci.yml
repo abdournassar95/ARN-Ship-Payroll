@@ -25,5 +25,17 @@ jobs:
         pip install -r requirements.txt
 
     - name: Run Tests
+      shell: bash
       run: |
-        pytest
+        set -o pipefail
+        python -m pytest -q --tb=short 2>&1 | tee pytest_output.txt
+
+    - name: Report failures as annotations
+      if: failure()
+      shell: bash
+      run: |
+        echo "===== ملخص الإخفاقات (Failure Summary) ====="
+        tail -40 pytest_output.txt || true
+        grep -E "^(FAILED|ERROR)" pytest_output.txt | head -25 | while read -r line; do
+          echo "::error::$line"
+        done
