@@ -26,9 +26,9 @@ class TestReportService:
         assert norm["vessel_name"] == "ARN Pioneer"
 
     def test_normalize_crew_data_salary_math(self):
-        # total_due = 1000, extra = 200, deduction = 50
-        # period_wage = 1000 - 200 + 50 = 850
-        # total_earnings = 850 + 200 = 1050
+        # إجمالي المستحق القادم من المحرك = أجر الفترة + إضافي + رصيد سابق − خصم مباشر
+        # period_wage = 1000 - 200 - 0 + 50 = 850
+        # total_earnings = 850 + 200 + 0 - 50 = 1000  (يطابق المحرك حرفياً)
         input_data = {
             "total_due": 1000.0,
             "curr_extra": 200.0,
@@ -37,9 +37,24 @@ class TestReportService:
         }
         norm = ReportService._normalize_crew_data(input_data)
         assert norm["total_due"] == 850.0
-        assert norm["total_earnings"] == 1050.0
+        assert norm["total_earnings"] == 1000.0  # == total_due الأصلي من المحرك
         assert norm["extra"] == 200.0
         assert norm["deduction"] == 50.0
+        assert norm["prev_balance"] == 0.0
+
+    def test_normalize_crew_data_prev_balance(self):
+        # رصيد سابق سالب (له على الشركة) يجب أن يُعاد في الإجمالي كما هو
+        input_data = {
+            "total_due": 2500.0,
+            "curr_extra": 0.0,
+            "curr_ded": 0.0,
+            "prev_balance": -500.0,
+            "name": "عمر خالد"
+        }
+        norm = ReportService._normalize_crew_data(input_data)
+        assert norm["prev_balance"] == -500.0
+        assert norm["total_due"] == 3000.0          # أجر الفترة قبل الرصيد السابق
+        assert norm["total_earnings"] == 2500.0     # يعود ليطابق المحرك
 
     def test_normalize_crew_data_empty_input(self):
         # التحقق من أن إدخال كائن فارغ لا يسبب كراش ويملأ الحقول بالقيم الافتراضية

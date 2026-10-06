@@ -537,73 +537,36 @@ class AlertService:
             return False
 
     def export_pdf(self, output_path: str, alerts: List[Dict[str, Any]], vessel_name: str = "ARN Fleet") -> bool:
-        """تصدير تقرير التنبيهات إلى PDF"""
+        """
+        تصدير تقرير التنبيهات إلى ملف PDF رسمي بالعربية.
+
+        يستخدم محرك التقارير Qt نفسه (ReportService) لضمان ظهور العربية (RTL)
+        دون الاعتماد على reportlab وخطوطه اللاتينية.
+        """
         try:
-            from reportlab.lib.pagesizes import letter, landscape
-            from reportlab.lib import colors
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle
-            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from report_service import ReportService
 
-            doc = SimpleDocTemplate(
-                output_path,
-                pagesize=landscape(letter),
-                rightMargin=30,
-                leftMargin=30,
-                topMargin=30,
-                bottomMargin=30
-            )
-            story = []
-            styles = getSampleStyleSheet()
-
-            title_style = ParagraphStyle(
-                'AlertsTitle',
-                parent=styles['Heading1'],
-                alignment=1,
-                fontSize=18,
-                textColor=colors.HexColor('#0f172a'),
-                spaceAfter=6
-            )
-            sub_style = ParagraphStyle(
-                'AlertsSub',
-                parent=styles['Normal'],
-                alignment=1,
-                fontSize=10,
-                textColor=colors.HexColor('#64748b'),
-                spaceAfter=15
-            )
-
-            story.append(Paragraph("ARN TECHNOLOGY - SMART ALERTS AUDIT REPORT", title_style))
-            story.append(Paragraph(f"Vessel: {vessel_name} | Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Total Alerts: {len(alerts)}", sub_style))
-
-            table_data = [["#", "Timestamp", "Rule", "Severity", "Target", "Status", "Alert Message"]]
+            rows = []
             for idx, item in enumerate(alerts, 1):
-                status = "Resolved" if item.get('is_resolved') else ("Read" if item.get('is_read') else "Active")
-                table_data.append([
-                    str(idx),
+                status = "معالَج" if item.get('is_resolved') else ("مقروء" if item.get('is_read') else "قائم")
+                rows.append([
+                    idx,
                     str(item.get('triggered_at', ''))[:16],
                     str(item.get('rule_code', '')),
                     str(item.get('severity', '')),
                     str(item.get('target_name') or '-'),
                     status,
-                    str(item.get('message', ''))[:70]
+                    str(item.get('message', '')),
                 ])
 
-            t = Table(table_data, colWidths=[30, 110, 85, 70, 85, 60, 280])
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e293b')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 9),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 8),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#f8fafc'), colors.white]),
-            ]))
-
-            story.append(t)
-            doc.build(story)
+            ReportService.generate_table_report(
+                title="ARN TECHNOLOGY — تقرير التنبيهات الذكية",
+                subtitle=f"السفينة: {vessel_name} | عدد التنبيهات: {len(alerts)}",
+                headers=["#", "التاريخ", "القاعدة", "الخطورة", "الهدف", "الحالة", "الرسالة"],
+                rows=rows,
+                col_pct=[4, 12, 10, 8, 12, 8, 46],
+                output_path=output_path,
+            )
             return True
         except Exception as e:
             print(f"⚠️ فشل تصدير PDF للتنبيهات: {e}")

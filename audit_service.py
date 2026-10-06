@@ -129,74 +129,33 @@ class AuditService:
 
     def export_pdf(self, output_path: str, logs: List[Dict[str, Any]], vessel_name: str = "ARN Fleet") -> bool:
         """
-        تصدير سجل التدقيق إلى ملف PDF رسمي
+        تصدير سجل التدقيق إلى ملف PDF رسمي بالعربية.
+
+        يعتمد على محرك التقارير Qt نفسه (ReportService) المستخدم في كشوف الرواتب،
+        لضمان ظهور العربية بشكل صحيح (RTL) وعدم الحاجة إلى خطوط لاتينية أو مكتبات خارجية.
         """
         try:
-            from reportlab.lib.pagesizes import letter, landscape
-            from reportlab.lib import colors
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-            
-            doc = SimpleDocTemplate(
-                output_path,
-                pagesize=landscape(letter),
-                rightMargin=30,
-                leftMargin=30,
-                topMargin=30,
-                bottomMargin=30
-            )
-            story = []
-            styles = getSampleStyleSheet()
+            from report_service import ReportService
 
-            # ترويسة
-            title_style = ParagraphStyle(
-                'ReportTitle',
-                parent=styles['Heading1'],
-                alignment=1,
-                fontSize=18,
-                textColor=colors.HexColor('#0f172a'),
-                spaceAfter=6
-            )
-            sub_style = ParagraphStyle(
-                'ReportSubtitle',
-                parent=styles['Normal'],
-                alignment=1,
-                fontSize=10,
-                textColor=colors.HexColor('#64748b'),
-                spaceAfter=15
-            )
-
-            story.append(Paragraph("ARN TECHNOLOGY - SYSTEM AUDIT TRAIL REPORT", title_style))
-            story.append(Paragraph(f"Vessel: {vessel_name} | Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Total Records: {len(logs)}", sub_style))
-
-            # إعداد بيانات الجدول
-            table_data = [["#", "Timestamp", "User", "Action", "Table", "Description"]]
+            rows = []
             for idx, item in enumerate(logs, 1):
-                table_data.append([
-                    str(idx),
+                rows.append([
+                    idx,
                     str(item.get('timestamp', '')),
                     str(item.get('username', '')),
                     str(item.get('action', '')),
                     str(item.get('table_name') or '-'),
-                    str(item.get('description', ''))[:80]
+                    str(item.get('description', '')),
                 ])
 
-            t = Table(table_data, colWidths=[35, 120, 80, 80, 80, 320])
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e293b')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 9),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 8),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#f8fafc'), colors.white]),
-            ]))
-
-            story.append(t)
-            doc.build(story)
+            ReportService.generate_table_report(
+                title="ARN TECHNOLOGY — سجل التدقيق الرسمي",
+                subtitle=f"السفينة: {vessel_name} | عدد السجلات: {len(logs)}",
+                headers=["#", "التاريخ والوقت", "المستخدم", "العملية", "الجدول", "الوصف"],
+                rows=rows,
+                col_pct=[4, 15, 12, 11, 9, 49],
+                output_path=output_path,
+            )
             return True
         except Exception as e:
             print(f"⚠️ فشل تصدير PDF لسجل التدقيق: {e}")

@@ -995,10 +995,9 @@ class MainDashboard(QMainWindow):
         )
         if reply == QMessageBox.StandardButton.Yes:
             try:
-                with sqlite3.connect('arn_ship_payroll.db') as conn:
-                    conn.execute("DELETE FROM CrewWages WHERE No=?", (crew_id,))
-                    conn.execute("DELETE FROM payroll_history WHERE crew_id=?", (crew_id,))
-                    conn.commit()
+                # حذف شامل: بيانات البحار + رواتبه + وثائقه + لقطات عهدته + إغلاق تنبيهاته
+                from crew_service import delete_crew_cascade
+                delete_crew_cascade(self.engine.db_path, crew_id)
                 self.refresh_data()
                 try:
                     from audit_service import AuditService
@@ -1125,19 +1124,9 @@ class MainDashboard(QMainWindow):
             )
             if confirm == QMessageBox.StandardButton.Yes:
                 try:
-                    conn = sqlite3.connect('arn_ship_payroll.db')
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM CrewWages")
-                    cursor.execute("DELETE FROM payroll_history")
-                    cursor.execute("DELETE FROM general_cash")
-                    cursor.execute("DELETE FROM cash_closed_months")
-                    cursor.execute("DELETE FROM cash_reset_snapshot")
-                    try:
-                        cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('CrewWages', 'payroll_history', 'general_cash', 'cash_closed_months', 'cash_reset_snapshot')")
-                    except:
-                        pass
-                    conn.commit()
-                    conn.close()
+                    # تهيئة شاملة: تفريغ كل جداول التشغيل (بحارة + رواتب + صندوق + وثائق + تنبيهات)
+                    from crew_service import reset_all_data
+                    reset_all_data(self.engine.db_path)
 
                     self.refresh_data()
                     QMessageBox.information(self, "نجاح", "تم تصفير وتهيئة كافة بيانات النظام بنجاح!")
