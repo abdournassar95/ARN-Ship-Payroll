@@ -26,6 +26,7 @@ from ui_add_crew import AddCrewWindow
 from ui_admin import AdminWindow
 
 from report_service import ReportService
+import db
 import paths
 import settings_service
 import os
@@ -47,7 +48,7 @@ class PayrollEngine:
     def load_crew_data(self, year, month, calc_mode):
         crew_data = []
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
 

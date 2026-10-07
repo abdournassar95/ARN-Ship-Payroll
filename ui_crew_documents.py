@@ -1,4 +1,5 @@
 # ui_crew_documents.py
+import db
 import paths
 """
 منظومة إدارة الشهادات والوثائق البحرية للطاقم - ARN Ship Payroll
@@ -342,7 +343,7 @@ class CrewDocumentsWidget(QWidget):
             return
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
                 c.execute("""
@@ -400,7 +401,7 @@ class CrewDocumentsWidget(QWidget):
                 return
 
             try:
-                with sqlite3.connect(self.db_path) as conn:
+                with db.session(self.db_path) as conn:
                     conn.execute("""
                         INSERT INTO crew_documents (crew_id, doc_type, doc_number, issue_date, expiry_date, notes)
                         VALUES (?, ?, ?, ?, ?, ?)
@@ -437,7 +438,7 @@ class CrewDocumentsWidget(QWidget):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             data = dlg.get_data()
             try:
-                with sqlite3.connect(self.db_path) as conn:
+                with db.session(self.db_path) as conn:
                     conn.execute("""
                         UPDATE crew_documents 
                         SET doc_type = ?, doc_number = ?, issue_date = ?, expiry_date = ?, notes = ?
@@ -466,7 +467,7 @@ class CrewDocumentsWidget(QWidget):
         )
         if confirm == QMessageBox.StandardButton.Yes:
             try:
-                with sqlite3.connect(self.db_path) as conn:
+                with db.session(self.db_path) as conn:
                     conn.execute("DELETE FROM crew_documents WHERE id = ?", (doc_id,))
                     conn.commit()
 
@@ -746,7 +747,7 @@ class FleetDocumentsDialog(QDialog):
         self.combo_crew_filter.addItem("🌊 كافة أفراد الطاقم (عرض الأسطول)", None)
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
                 c.execute("SELECT No, Name, Rank FROM CrewWages ORDER BY No ASC")
@@ -766,7 +767,7 @@ class FleetDocumentsDialog(QDialog):
         """استرجاع كافة شهادات ووثائق الطاقم وتحديث بطاقات المؤشرات والجدول"""
         self.all_docs_cache.clear()
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
                 c.execute("""
@@ -967,7 +968,7 @@ class FleetDocumentsDialog(QDialog):
         """إضافة شهادة جديدة مع دعم اختيار البحار ونوع الشهادة"""
         crew_tuples = []
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
                 c.execute("SELECT No, Name, Rank FROM CrewWages ORDER BY No ASC")
@@ -993,7 +994,7 @@ class FleetDocumentsDialog(QDialog):
                 return
 
             try:
-                with sqlite3.connect(self.db_path) as conn:
+                with db.session(self.db_path) as conn:
                     conn.execute("""
                         INSERT INTO crew_documents (crew_id, doc_type, doc_number, issue_date, expiry_date, notes)
                         VALUES (?, ?, ?, ?, ?, ?)
@@ -1012,7 +1013,7 @@ class FleetDocumentsDialog(QDialog):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             data = dlg.get_data()
             try:
-                with sqlite3.connect(self.db_path) as conn:
+                with db.session(self.db_path) as conn:
                     conn.execute("""
                         UPDATE crew_documents 
                         SET doc_type = ?, doc_number = ?, issue_date = ?, expiry_date = ?, notes = ?
@@ -1034,7 +1035,7 @@ class FleetDocumentsDialog(QDialog):
         )
         if confirm == QMessageBox.StandardButton.Yes:
             try:
-                with sqlite3.connect(self.db_path) as conn:
+                with db.session(self.db_path) as conn:
                     conn.execute("DELETE FROM crew_documents WHERE id = ?", (doc_id,))
                     conn.commit()
 

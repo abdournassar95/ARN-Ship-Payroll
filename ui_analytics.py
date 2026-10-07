@@ -1,6 +1,6 @@
 # ui_analytics.py
-import sqlite3
 
+import db
 import paths
 import math
 from datetime import datetime
@@ -304,7 +304,7 @@ class AnalyticsWindow(QDialog):
         c_month = int(self.combo_month.currentText())
         c_year = int(self.combo_year.currentText())
         
-        conn = sqlite3.connect(self.db_path)
+        conn = db.connect(self.db_path)
         cursor = conn.cursor()
         
         # 1. جلب إحصائيات الرواتب

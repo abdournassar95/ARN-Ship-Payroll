@@ -19,6 +19,10 @@ from PyQt6.QtGui import QFont, QColor, QCursor
 
 from report_service import ReportService
 from audit_service import AuditService
+from utils import parse_non_negative
+import cash_service
+import db
+import month_guard
 
 
 class MasterCashWindow(QDialog):
@@ -203,7 +207,7 @@ class MasterCashWindow(QDialog):
         card_in, self.val_kpi_in = self.create_kpi_card("إجمالي الوارد (Income) 📈", "#10b981")
         card_out, self.val_kpi_out = self.create_kpi_card("المصروفات العامة (Expenses) 📉", "#ef4444")
         card_adv, self.val_kpi_adv = self.create_kpi_card("سلف البحارة للشهر (Advances) 👥", "#f59e0b")
-        card_net, self.val_kpi_net = self.create_kpi_card("الرصيد الصافي المتبقي (Net Cash) 💰", "#38bdf8")
+        card_net, self.val_kpi_net = self.create_kpi_card("رصيد الصندوق (عهدة سابقة + الشهر) 💰", "#38bdf8")
 
         kpi_layout.addWidget(card_in)
         kpi_layout.addWidget(card_out)
@@ -328,15 +332,15 @@ class MasterCashWindow(QDialog):
             pass
 
     def is_month_closed(self):
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                res = conn.execute(
-                    "SELECT COUNT(*) FROM cash_closed_months WHERE month=? AND year=?",
-                    (self.current_month, self.current_year)
-                ).fetchone()
-                return res[0] > 0
-        except Exception:
-            return False
+        """حالة الإقفال من الوحدة الموحّدة (month_guard) — لا استعلام محلي مكرّر."""
+        return month_guard.is_month_closed(self.current_year, self.current_month, self.db_path)
+
+    def current_user_info(self):
+        """هوية المستخدم الحالي من لوحة القيادة (للتدقيق والصلاحيات)."""
+        user = getattr(self.parent(), 'current_user', None) or {}
+        return (int(user.get('id') or 1),
+                str(user.get('full_name') or user.get('username') or 'ADMIN'),
+                str(user.get('role') or ''))
 
     def load_cash_data(self):
         """تحميل وتحديث حركات الصندوق وحساب الإحصائيات"""
@@ -366,7 +370,7 @@ class MasterCashWindow(QDialog):
         cleared_advances = 0.0
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
 
@@ -409,7 +413,10 @@ class MasterCashWindow(QDialog):
 
         # صافي سلف البحارة المحملة على الصندوق لهذا الشهر
         effective_crew_adv = max(0.0, crew_advances - cleared_advances)
-        net_cash = total_in - total_out - effective_crew_adv
+        # التعريف الموحّد لرصيد الصندوق (العيب F4): العهدة السابقة + حركة الشهر
+        # — نفس الرقم الذي يطبعه التقرير ويستخدمه تنبيه «رصيد منخفض».
+        carried = cash_service.carried_balance(self.current_year, self.current_month, self.db_path)
+        net_cash = carried + total_in - total_out - effective_crew_adv
 
         # تحديث كروت المؤشرات
         self.val_kpi_in.setText(f"+${total_in:,.2f}")
@@ -423,7 +430,7 @@ class MasterCashWindow(QDialog):
 
         # تعبئة الجدول
         self.table.setRowCount(0)
-        running_bal = 0.0
+        running_bal = carried  # عمود الرصيد التراكمي يبدأ من العهدة السابقة لا من صفر
 
         for i, tx in enumerate(transactions):
             self.table.insertRow(i)
@@ -499,7 +506,7 @@ class MasterCashWindow(QDialog):
             'out': total_out,
             'crew_adv': effective_crew_adv,
             'net': net_cash,
-            'old_adv': 0.0
+            'old_adv': carried          # كانت صفراً ثابتاً ⇒ «عهدة سابقة 0» في التقرير
         }
 
     def add_transaction(self):
@@ -518,15 +525,16 @@ class MasterCashWindow(QDialog):
             return
 
         try:
-            amount = float(amt_str)
+            # نفس مُحقِّق القيم المستخدم في كل مسارات الإدخال (العيب F2)
+            amount = parse_non_negative(amt_str, "المبلغ")
             if amount <= 0:
-                raise ValueError()
-        except ValueError:
-            QMessageBox.warning(self, "خطأ في الإدخال", "يرجى إدخال مبلغ صحيح وموجب.")
+                raise ValueError("يجب أن يكون المبلغ أكبر من صفر.")
+        except ValueError as exc:
+            QMessageBox.warning(self, "خطأ في الإدخال", str(exc))
             return
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT INTO general_cash (amount, type, description, date)
@@ -566,7 +574,7 @@ class MasterCashWindow(QDialog):
         )
         if reply == QMessageBox.StandardButton.Yes:
             try:
-                with sqlite3.connect(self.db_path) as conn:
+                with db.session(self.db_path) as conn:
                     conn.execute("DELETE FROM general_cash WHERE id = ?", (tx_id,))
                     conn.commit()
 
@@ -594,14 +602,10 @@ class MasterCashWindow(QDialog):
             )
             if reply == QMessageBox.StandardButton.Yes:
                 try:
-                    with sqlite3.connect(self.db_path) as conn:
-                        conn.execute(
-                            "DELETE FROM cash_closed_months WHERE month=? AND year=?",
-                            (self.current_month, self.current_year)
-                        )
-                        conn.commit()
+                    month_guard.open_month(self.current_year, self.current_month, self.db_path)
+                    uid, uname, _ = self.current_user_info()
                     AuditService(self.db_path).log(
-                        1, "ADMIN", "UPDATE", "cash_closed_months", 0,
+                        uid, uname, "UNLOCK_MONTH", "cash_closed_months", 0,
                         f"إلغاء إقفال شهر الصندوق {self.current_month}/{self.current_year}"
                     )
                     self.load_cash_data()
@@ -616,14 +620,10 @@ class MasterCashWindow(QDialog):
             )
             if reply == QMessageBox.StandardButton.Yes:
                 try:
-                    with sqlite3.connect(self.db_path) as conn:
-                        conn.execute(
-                            "INSERT OR IGNORE INTO cash_closed_months (month, year) VALUES (?, ?)",
-                            (self.current_month, self.current_year)
-                        )
-                        conn.commit()
+                    month_guard.close_month(self.current_year, self.current_month, self.db_path)
+                    uid, uname, _ = self.current_user_info()
                     AuditService(self.db_path).log(
-                        1, "ADMIN", "LOCK", "cash_closed_months", 0,
+                        uid, uname, "LOCK_MONTH", "cash_closed_months", 0,
                         f"إقفال شهر الصندوق {self.current_month}/{self.current_year}"
                     )
                     self.load_cash_data()
@@ -642,7 +642,7 @@ class MasterCashWindow(QDialog):
         )
         if reply == QMessageBox.StandardButton.Yes:
             try:
-                with sqlite3.connect(self.db_path) as conn:
+                with db.session(self.db_path) as conn:
                     cursor = conn.cursor()
                     # جلب كافة سلف البحارة في هذا الشهر
                     advances = cursor.execute("""

@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 
 import paths
+import db
 
 class AuditService:
     """
@@ -28,7 +29,7 @@ class AuditService:
         تسجيل حدث تدقيق جديد بشكل آمن
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 cursor = conn.cursor()
                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 cursor.execute("""
@@ -75,7 +76,7 @@ class AuditService:
         جلب وتصفية سجلات التدقيق مع دعم الفلترة المتعددة
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
 
@@ -114,7 +115,7 @@ class AuditService:
 
     def get_distinct_users(self) -> List[str]:
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT DISTINCT username FROM audit_log ORDER BY username")
                 return [r[0] for r in cursor.fetchall() if r[0]]
@@ -123,7 +124,7 @@ class AuditService:
 
     def get_distinct_actions(self) -> List[str]:
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT DISTINCT action FROM audit_log ORDER BY action")
                 return [r[0] for r in cursor.fetchall() if r[0]]

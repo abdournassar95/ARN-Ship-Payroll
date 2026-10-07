@@ -14,9 +14,10 @@
 
 ARN Technology (c) 2026 — تطوير وبرمجة: عبده رجب نصار
 """
-import sqlite3
 from contextlib import closing
 from typing import Dict, List
+
+import db
 
 # الجداول التي تُفرَّغ عند «تهيئة النظام» (مع الإبقاء على المستخدمين والإعدادات وقواعد التنبيهات)
 RESET_TABLES: List[str] = [
@@ -30,11 +31,9 @@ RESET_TABLES: List[str] = [
 ]
 
 
-def _connect(db_path: str) -> sqlite3.Connection:
-    """اتصال قاعدة بيانات مع تفعيل قيود المفاتيح الأجنبية."""
-    conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+def _connect(db_path: str):
+    """اتصال موحّد (db.connect) — يضمن قيود المفاتيح الأجنبية في كل مسار."""
+    return db.connect(db_path)
 
 
 def delete_crew_cascade(db_path: str, crew_id: int) -> Dict[str, int]:

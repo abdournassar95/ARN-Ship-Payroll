@@ -1,5 +1,8 @@
 # ui_accounting.py
+import db
 import paths
+import month_guard
+from utils import parse_non_negative
 import sqlite3
 import json
 from datetime import datetime
@@ -96,6 +99,7 @@ class AccountingWindow(QDialog):
         
         self.history_cache = {} # Cache for edited months: (year, month) -> dict
         self.month_widgets = {} # (year, month) -> tuple of (frame, checkbox, btn)
+        self.paid_status_changes = {} # {'YYYY-MM': True/False} تغييرات «تسوية 🔒» بانتظار الحفظ
         
         self.setWindowTitle("تعديل بيانات وحسابات البحار")
         self.resize(820, 750)
@@ -137,7 +141,7 @@ class AccountingWindow(QDialog):
         widget.setGraphicsEffect(shadow)
 
     def load_db_data(self):
-        conn = sqlite3.connect(self.db_path)
+        conn = db.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         crew = cursor.execute("SELECT * FROM CrewWages WHERE No = ?", (self.crew_id,)).fetchone()
@@ -152,7 +156,7 @@ class AccountingWindow(QDialog):
         if key in self.history_cache:
             return self.history_cache[key]
             
-        conn = sqlite3.connect(self.db_path)
+        conn = db.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         hist = cursor.execute("SELECT * FROM payroll_history WHERE crew_id = ? AND payroll_month = ? AND payroll_year = ?", 
@@ -575,7 +579,29 @@ class AccountingWindow(QDialog):
             def make_cb_handler(key, check_box, item_frame, year_val, month_val):
                 def handler(state):
                     checked = (state == Qt.CheckState.Checked.value or state == True or state == 2)
+                    # صلاحية: تبديل «تسوية 🔒» للمدير فقط (العيب F3)
+                    if not self.can_manage_settlement():
+                        check_box.blockSignals(True)
+                        check_box.setChecked(bool(self.paid_months_data.get(key, False)))
+                        check_box.blockSignals(False)
+                        QMessageBox.warning(
+                            self, "صلاحية غير كافية",
+                            "تغيير حالة التسوية متاح لصلاحية المدير (Admin) فقط."
+                        )
+                        return
+                    # شهر مقفل محاسبياً لا تُغيَّر تسويته
+                    if month_guard.is_month_closed(year_val, month_val, self.db_path):
+                        check_box.blockSignals(True)
+                        check_box.setChecked(bool(self.paid_months_data.get(key, False)))
+                        check_box.blockSignals(False)
+                        QMessageBox.warning(
+                            self, "شهر مقفل 🔒",
+                            f"الشهر {month_val:02d}/{year_val} مقفل محاسبياً — "
+                            "افتحه من شاشة صندوق القبطان قبل تغيير التسوية."
+                        )
+                        return
                     self.paid_months_data[key] = checked
+                    self.paid_status_changes[key] = checked
                     check_box.setText("تسوية 🔒" if checked else "تفتيح 🔓")
                     self.update_month_frame_style(item_frame, checked, (year_val == self.current_year and month_val == self.current_month))
                 return handler
@@ -623,26 +649,48 @@ class AccountingWindow(QDialog):
                 }
             """)
 
-    def save_current_form_to_cache(self):
+    def read_form_values(self):
+        """
+        قراءة حقول الشهر الحالي مع التحقق الكامل (العيب F2).
+
+        كل المبالغ موجبة دائماً: «إضافي» يُجمَع و«خصم مباشر» يُطرَح — فالإشارة
+        من نوع الحقل لا من الرقم، ولا يوجد سبب مشروع لقيمة سالبة هنا.
+        ترفع ``ValueError`` برسالة عربية تحدّد الحقل المخالف.
+        """
+        return {
+            'extra': parse_non_negative(self.extra_e.text(), "الإضافي"),
+            'deduction': parse_non_negative(self.deduct_e.text(), "الخصم المباشر"),
+            'payment_cash': parse_non_negative(self.cash_e.text(), "سلفة الكاش"),
+            'cigarette': parse_non_negative(self.cig_e.text(), "السجائر"),
+            'transfer': parse_non_negative(self.trans_e.text(), "الحوالة"),
+        }
+
+    def save_current_form_to_cache(self, strict=True):
+        """
+        حفظ قيم النموذج في الذاكرة المؤقتة.
+
+        ``strict=True``  (عند الحفظ)      ⇒ ترفع ValueError ليعرضها المستدعي.
+        ``strict=False`` (عند التنقّل)    ⇒ تُبقي القيم السابقة بلا تغيير
+                                            (لا تُخزِّن صفراً كاذباً مكان قيمة غير صالحة).
+        """
         try:
-            extra = float(self.extra_e.text() or 0)
-            deduct = float(self.deduct_e.text() or 0)
-            cash = float(self.cash_e.text() or 0)
-            cig = float(self.cig_e.text() or 0)
-            trans = float(self.trans_e.text() or 0)
-            self.history_cache[(self.current_year, self.current_month)] = {
-                'extra': extra,
-                'deduction': deduct,
-                'payment_cash': cash,
-                'cigarette': cig,
-                'transfer': trans
-            }
+            values = self.read_form_values()
         except ValueError:
-            pass
+            if strict:
+                raise
+            return False
+        self.history_cache[(self.current_year, self.current_month)] = values
+        return True
 
     def select_month(self, year, month):
-        # 1. Save current form values to cache
-        self.save_current_form_to_cache()
+        # 1. Save current form values to cache (لا نُنقّل مع قيمة غير صالحة)
+        if not self.save_current_form_to_cache(strict=False):
+            QMessageBox.warning(
+                self, "قيمة غير صالحة",
+                "يوجد حقل مالي بقيمة غير صحيحة أو سالبة في الشهر الحالي.\n"
+                "صحّحه أولاً ثم انتقل إلى شهر آخر."
+            )
+            return
         
         # 2. Switch current month
         self.current_year = year
@@ -664,16 +712,35 @@ class AccountingWindow(QDialog):
 
     def save_data(self):
         try:
-            # Save active form
-            self.save_current_form_to_cache()
-            
+            # Save active form — strict: أي قيمة سالبة/غير صالحة توقف الحفظ برسالة واضحة
+            try:
+                self.save_current_form_to_cache(strict=True)
+            except ValueError as exc:
+                QMessageBox.warning(self, "قيمة غير صالحة", str(exc))
+                return
+
             name = self.name_e.text()
             rank = self.rank_combo.currentText()
-            new_wage = float(self.wage_e.text() or 0)
+            # الراتب لا يكون سالباً (العيب F2)
+            new_wage = parse_non_negative(self.wage_e.text(), "الراتب الشهري")
             period_from = self.period_cal.date().toString("yyyy-MM-dd")
             contract_start = self.contract_start_cal.date().toString("yyyy-MM-dd")
             contract_end = self.contract_end_cal.date().toString("yyyy-MM-dd")
+            # «رصيد سابق» يبقى ذا إشارة عن قصد: قيمة سالبة تعني أن البحار مدين للشركة
             previous = float(self.prev_e.text() or 0)
+            if previous != previous:  # NaN guard
+                raise ValueError("قيمة غير صالحة في «رصيد سابق».")
+            
+            # حرس الإقفال الشهري (العيب F3): كل شهر مُعدَّل يجب أن يكون مفتوحاً
+            # وحالة «التسوية» لا تُغيَّر لشهر مقفل.
+            months_to_write = list(self.history_cache.keys())
+            try:
+                month_guard.assert_months_open(months_to_write, self.db_path)
+                month_guard.assert_months_open(
+                    [self.key_to_period(k) for k in self.paid_status_changes], self.db_path)
+            except month_guard.MonthClosedError as exc:
+                QMessageBox.warning(self, "شهر مقفل 🔒", str(exc))
+                return
             
             # Clean up paid_months_data: remove False entries
             cleaned_paid = {k: True for k, v in self.paid_months_data.items() if v}
@@ -700,7 +767,7 @@ class AccountingWindow(QDialog):
                     
             wage_history_json = json.dumps(wage_history)
 
-            conn = sqlite3.connect(self.db_path)
+            conn = db.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE CrewWages 
@@ -720,16 +787,32 @@ class AccountingWindow(QDialog):
             conn.commit()
             conn.close()
 
+            # تسجيل تغييرات التسوية (تفتيح/إقفال) في سجل التدقيق (العيب F3)
+            try:
+                from audit_service import AuditService as _Audit
+                uid, uname, _ = self.current_user_info()
+                for key, status in self.paid_status_changes.items():
+                    y, m = self.key_to_period(key)
+                    _Audit(self.db_path).log(
+                        uid, uname, "SETTLE_MONTH" if status else "UNSETTLE_MONTH",
+                        "CrewWages", self.crew_id,
+                        f"{'تسوية' if status else 'تفتيح'} شهر {m:02d}/{y} للبحار {name}"
+                    )
+                self.paid_status_changes.clear()
+            except Exception:
+                pass
+
             # تسجيل في سجل التدقيق وفحص التنبيهات
             try:
                 from audit_service import AuditService
                 from alert_service import AlertService
-                audit = AuditService()
+                audit = AuditService(self.db_path)
                 if old_wage != new_wage:
                     audit.log(1, "ADMIN", "UPDATE_WAGE", "CrewWages", self.crew_id, f"تعديل راتب البحار {name} من ${old_wage:,.2f} إلى ${new_wage:,.2f}")
-                audit.log_update(1, "ADMIN", "CrewWages", self.crew_id, f"تحديث حسابات وتسويات البحار {name}")
+                uid, uname, _ = self.current_user_info()
+                audit.log_update(uid, uname, "CrewWages", self.crew_id, f"تحديث حسابات وتسويات البحار {name}")
                 
-                alert_svc = AlertService()
+                alert_svc = AlertService(self.db_path)
                 alert_svc.check_contract_expiry()
                 alert_svc.check_high_advance(self.crew_id, self.current_month, self.current_year)
                 alert_svc.check_unusual_deduction(self.crew_id, self.current_month, self.current_year)
@@ -746,6 +829,28 @@ class AccountingWindow(QDialog):
 
         except ValueError:
             QMessageBox.critical(self, "خطأ في الإدخال", "يرجى إدخال أرقام صحيحة.")
+
+    @staticmethod
+    def key_to_period(m_key):
+        """'2026-10' ⇒ (2026, 10)"""
+        year_s, month_s = str(m_key).split('-')[:2]
+        return int(year_s), int(month_s)
+
+    def current_user_info(self):
+        """هوية المستخدم الحالي من لوحة القيادة (للتدقيق والصلاحيات)."""
+        user = None
+        parent = getattr(self, 'parent_window', None)
+        if parent is not None:
+            user = getattr(parent, 'current_user', None)
+        user = user or {}
+        return (int(user.get('id') or 1),
+                str(user.get('full_name') or user.get('username') or 'ADMIN'),
+                str(user.get('role') or ''))
+
+    def can_manage_settlement(self):
+        """هل يملك المستخدم صلاحية تغيير «تسوية 🔒»؟ (Admin أو بيئة بلا تحديد هوية)"""
+        _, _, role = self.current_user_info()
+        return (role == 'Admin') or (not role)
 
     def open_crew_documents(self):
         try:

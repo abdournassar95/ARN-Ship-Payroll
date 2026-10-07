@@ -9,7 +9,6 @@ import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-import paths
 import settings_service
 
 
@@ -467,6 +466,11 @@ class ReportService:
         out_val = float(summary.get('out', 0))
         old_adv = float(summary.get('old_adv', 0))
 
+        # مصدر واحد للإعدادات (العيب F1) — لا اسم شركة ثابت في مستند رسمي
+        _settings = settings_service.get_system_settings()
+        company_name = str(_settings["company_name"])
+        vessel_name = str(_settings["vessel_name"])
+
         rows_html = ""
         running_balance = old_adv
         
@@ -513,8 +517,8 @@ class ReportService:
         <table width="100%" cellpadding="5" cellspacing="0" style="border-bottom: 2px solid #1E3A8A; margin-bottom: 15px;">
             <tr>
                 <td align="center">
-                    <div class="title-text">ARN FLEET MANAGEMENT</div>
-                    <div class="subtitle-text">Master Cash Statement / تقرير صندوق القبطان</div>
+                    <div class="title-text">{html.escape(company_name)}</div>
+                    <div class="subtitle-text">{html.escape(vessel_name)} — Master Cash Statement / تقرير صندوق القبطان</div>
                     <div style="font-size: 12pt; color: #475569; font-weight: bold; margin-top: 5px;">فترة المحاسبة: {month} / {year}</div>
                 </td>
             </tr>
