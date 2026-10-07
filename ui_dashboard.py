@@ -26,6 +26,8 @@ from ui_add_crew import AddCrewWindow
 from ui_admin import AdminWindow
 
 from report_service import ReportService
+import paths
+import settings_service
 import os
 
 # ============================================================
@@ -34,20 +36,13 @@ import os
 class PayrollEngine:
     """يتولى جميع عمليات الحساب وجلب البيانات من قاعدة البيانات"""
 
-    def __init__(self, db_path='arn_ship_payroll.db'):
-        self.db_path = db_path
+    def __init__(self, db_path=None):
+        # المسار من paths (ثابت) وليس من مجلد التشغيل — العيب F12
+        self.db_path = str(db_path) if db_path else paths.db_path_str()
 
     def get_system_info(self):
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                data = conn.execute(
-                    "SELECT company_name, vessel_name FROM system_settings WHERE id=1"
-                ).fetchone()
-            if data and len(data) == 2:
-                return f"{data[1]} - {data[0]}"
-            return "ARN Fleet - النظام المحاسبي"
-        except sqlite3.Error:
-            return "ARN Fleet - النظام المحاسبي"
+        # مصدر واحد للإعدادات (العيب F1) — لا استعلام ``WHERE id=1`` محلي بعد الآن
+        return settings_service.system_info_text(self.db_path)
 
     def load_crew_data(self, year, month, calc_mode):
         crew_data = []
@@ -1155,6 +1150,9 @@ class MainDashboard(QMainWindow):
             "<p style='text-align: center; font-size: 14px;'><b>حقوق النشر (c) 2026 لشركة ARN Technology.<br>جميع الحقوق محفوظة.</b></p>"
             "<p style='text-align: center; font-size: 14px;'>تطوير وبرمجة: <span style='color: #10b981; font-weight: bold;'>عبده رجب نصار</span></p>"
             "<p style='text-align: center; font-size: 12px; color: #64748b;'>يُمنع نسخ أو تعديل هذا البرنامج دون إذن مسبق.</p>"
+            f"<hr style='background-color: #334155; height: 1px; border: none; margin: 10px 0;'>"
+            f"<p style='text-align: center; font-size: 11px; color: #64748b;' dir='ltr'>"
+            f"{paths.db_path()}</p>"
         )
         info_label.setWordWrap(True)
         info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)

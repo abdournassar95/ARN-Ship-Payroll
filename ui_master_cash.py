@@ -24,7 +24,7 @@ from audit_service import AuditService
 class MasterCashWindow(QDialog):
     """نافذة إدارة صندوق القبطان والعهد النقدية"""
 
-    def __init__(self, parent=None, db_path='arn_ship_payroll.db'):
+    def __init__(self, parent=None, db_path=None):
         super().__init__(parent)
         self.parent_window = parent
         self.db_path = db_path

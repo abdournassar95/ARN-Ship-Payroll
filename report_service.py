@@ -9,6 +9,10 @@ import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
+import paths
+import settings_service
+
+
 class ReportService:
     _app = None
 
@@ -35,16 +39,11 @@ class ReportService:
         company_name = crew.get('company_name')
         vessel_name = crew.get('vessel_name')
         if not company_name or not vessel_name:
-            import sqlite3
             try:
-                conn = sqlite3.connect('arn_ship_payroll.db')
-                c = conn.cursor()
-                c.execute("SELECT company_name, vessel_name FROM system_settings LIMIT 1")
-                row = c.fetchone()
-                if row:
-                    company_name = company_name or row[0] or "ARN FLEET MANAGEMENT"
-                    vessel_name = vessel_name or row[1] or "Vessel"
-                conn.close()
+                # مصدر واحد للإعدادات (العيب F1)
+                data = settings_service.get_system_settings()
+                company_name = company_name or data["company_name"]
+                vessel_name = vessel_name or data["vessel_name"]
             except Exception:
                 pass
         
@@ -594,17 +593,10 @@ class ReportService:
         if not crew_data_list:
             raise ValueError("لا توجد بيانات بحارة لطباعتها في كشف المسير.")
 
-        company_name = "ARN FLEET MANAGEMENT"
-        vessel_name = "Vessel"
-        import sqlite3
-        try:
-            with sqlite3.connect('arn_ship_payroll.db') as conn:
-                row = conn.execute("SELECT company_name, vessel_name FROM system_settings LIMIT 1").fetchone()
-                if row:
-                    company_name = row[0] or company_name
-                    vessel_name = row[1] or vessel_name
-        except Exception:
-            pass
+        # مصدر واحد للإعدادات (العيب F1)
+        data = settings_service.get_system_settings()
+        company_name = data["company_name"]
+        vessel_name = data["vessel_name"]
 
         month_names = {1: 'يناير', 2: 'فبراير', 3: 'مارس', 4: 'أبريل', 5: 'مايو', 6: 'يونيو', 
                        7: 'يوليو', 8: 'أغسطس', 9: 'سبتمبر', 10: 'أكتوبر', 11: 'نوفمبر', 12: 'ديسمبر'}
@@ -999,19 +991,10 @@ class ReportService:
             output_path = os.path.join(out_dir, f"crew_documents_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf")
 
         # بيانات السفينة
-        company_name = "ARN FLEET MANAGEMENT"
-        vessel_name = "Vessel"
-        import sqlite3
-        try:
-            with sqlite3.connect('arn_ship_payroll.db') as conn:
-                c = conn.cursor()
-                c.execute("SELECT company_name, vessel_name FROM system_settings LIMIT 1")
-                row = c.fetchone()
-                if row:
-                    company_name = row[0] or company_name
-                    vessel_name = row[1] or vessel_name
-        except Exception:
-            pass
+        # مصدر واحد للإعدادات (العيب F1)
+        data = settings_service.get_system_settings()
+        company_name = data["company_name"]
+        vessel_name = data["vessel_name"]
 
         today = datetime.now().date()
         print_date = datetime.now().strftime('%Y-%m-%d %H:%M')

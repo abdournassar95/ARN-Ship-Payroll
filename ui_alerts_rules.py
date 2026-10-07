@@ -6,16 +6,18 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QColor
+import paths
 from alert_service import AlertService
 
 class AlertRulesDialog(QDialog):
     """
     نافذة إدارة وتعديل قواعد التنبيهات الذكية (الحدود، فترات التهدئة، الأصوات)
     """
-    def __init__(self, db_path: str = 'arn_ship_payroll.db', parent=None):
+    def __init__(self, db_path: str = None, parent=None):
         super().__init__(parent)
-        self.db_path = db_path
-        self.service = AlertService(db_path)
+        # المسار من النافذة الأم إن وُجد، وإلا من paths (ثابت) — العيب F12
+        self.db_path = str(db_path) if db_path else paths.db_path_str()
+        self.service = AlertService(self.db_path)
 
         self.setWindowTitle("إدارة قواعد التنبيهات الذكية ⚙️ | ARN Alerts Rules")
         self.resize(950, 560)

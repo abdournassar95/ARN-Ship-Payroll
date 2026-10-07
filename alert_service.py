@@ -4,15 +4,17 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from audit_service import AuditService
 from notification_service import NotificationService
+import paths
 
 class AlertService:
     """
     محرك التنبيهات الذكي لنظام ARN Ship Payroll
     يراقب 8 قواعد تلقائية للعمليات المالية والملاحية والإدارية
     """
-    def __init__(self, db_path: str = 'arn_ship_payroll.db'):
-        self.db_path = db_path
-        self.audit = AuditService(db_path)
+    def __init__(self, db_path: Optional[str] = None):
+        # المسار من paths (ثابت) وليس من مجلد التشغيل — العيب F12
+        self.db_path = str(db_path) if db_path else paths.db_path_str()
+        self.audit = AuditService(self.db_path)
 
     def _get_rule(self, rule_code: str) -> Optional[Dict[str, Any]]:
         try:

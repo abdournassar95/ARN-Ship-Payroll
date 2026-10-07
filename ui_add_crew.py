@@ -1,4 +1,5 @@
 # ui_add_crew.py
+import paths
 import sqlite3
 from datetime import datetime
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
@@ -11,6 +12,9 @@ class AddCrewWindow(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent_window = parent
+        # المسار من لوحة القيادة (المحرك) وإلا من paths (ثابت) — العيب F12
+        engine = getattr(parent, 'engine', None)
+        self.db_path = str(getattr(engine, 'db_path', '') or paths.db_path_str())
         self.setWindowTitle("إضافة بحار جديد")
         self.resize(620, 560)
         self.setMinimumSize(580, 500)
@@ -180,7 +184,7 @@ class AddCrewWindow(QDialog):
             contract_end = self.contract_end_cal.date().toString("yyyy-MM-dd")
             previous = float(self.prev_e.text() or 0)
             
-            conn = sqlite3.connect('arn_ship_payroll.db')
+            conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO CrewWages (Name, Rank, MonthlyWage, PeriodFrom, PREVIOUS, contract_start, contract_end) 

@@ -4,13 +4,16 @@ import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
+import paths
+
 class AuditService:
     """
     خدمة تسجيل واسترجاع سجل التدقيق (Audit Trail)
     مصممة بطريقة غير معطّلة (Non-blocking): أي خطأ في السجل لا يوقف عمل النظام
     """
-    def __init__(self, db_path: str = 'arn_ship_payroll.db'):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        # المسار من paths (ثابت) وليس من مجلد التشغيل — العيب F12
+        self.db_path = str(db_path) if db_path else paths.db_path_str()
 
     def log(
         self,

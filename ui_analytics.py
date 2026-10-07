@@ -1,5 +1,7 @@
 # ui_analytics.py
 import sqlite3
+
+import paths
 import math
 from datetime import datetime
 from PyQt6.QtWidgets import (
@@ -203,6 +205,9 @@ class LineChartWidget(QWidget):
 class AnalyticsWindow(QDialog):
     def __init__(self, parent=None, year=None, month=None):
         super().__init__(parent)
+        # المسار من لوحة القيادة (المحرك) وإلا من paths (ثابت) — العيب F12
+        engine = getattr(parent, 'engine', None)
+        self.db_path = str(getattr(engine, 'db_path', '') or paths.db_path_str())
         self.setWindowTitle("لوحة التحليلات والرسوم البيانية - ARN Fleet Analytics 📊")
         self.resize(1150, 780)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
@@ -299,7 +304,7 @@ class AnalyticsWindow(QDialog):
         c_month = int(self.combo_month.currentText())
         c_year = int(self.combo_year.currentText())
         
-        conn = sqlite3.connect('arn_ship_payroll.db')
+        conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         # 1. جلب إحصائيات الرواتب

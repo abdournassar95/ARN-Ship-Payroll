@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QColor, QCursor
+import paths
 from alert_service import AlertService
 from ui_alerts_rules import AlertRulesDialog
 
@@ -14,11 +15,12 @@ class AlertsCenterWindow(QDialog):
     """
     نافذة مركز التنبيهات الذكية وإدارتها
     """
-    def __init__(self, db_path: str = 'arn_ship_payroll.db', current_user_id: int = 1, parent=None):
+    def __init__(self, db_path: str = None, current_user_id: int = 1, parent=None):
         super().__init__(parent)
-        self.db_path = db_path
+        # المسار من النافذة الأم إن وُجد، وإلا من paths (ثابت) — العيب F12
+        self.db_path = str(db_path) if db_path else paths.db_path_str()
         self.current_user_id = current_user_id
-        self.service = AlertService(db_path)
+        self.service = AlertService(self.db_path)
 
         self.setWindowTitle("مركز التنبيهات الذكية 🔔 | ARN Alerts Center")
         self.resize(1150, 720)

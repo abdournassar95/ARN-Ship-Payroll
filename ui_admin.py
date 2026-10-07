@@ -9,10 +9,17 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QColor, QCursor
 from auth_service import AuthService
+from utils import normalize_role
+import config
+import paths
+import settings_service
 
 class AdminWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
+        # المسار يأتي من النافذة الأم إن توفّر، وإلا من paths (ثابت) — العيب F12
+        engine = getattr(parent, 'engine', None)
+        self.db_path = str(getattr(engine, 'db_path', '') or paths.db_path_str())
         self.setWindowTitle("لوحة تحكم المدير ⚙️")
         self.resize(880, 760)
         self.setMinimumSize(820, 680)
@@ -198,21 +205,21 @@ class AdminWindow(QDialog):
         main_layout.addWidget(card2)
 
     def load_settings(self):
-        conn = sqlite3.connect('arn_ship_payroll.db')
-        data = conn.execute("SELECT company_name, vessel_name FROM system_settings WHERE id=1").fetchone()
-        if data:
-            self.e_company.setText(data[0] if data[0] else "")
-            self.e_vessel.setText(data[1] if data[1] else "")
-        conn.close()
+        # مصدر واحد للإعدادات (العيب F1) — الصف الوحيد مهما كان معرّفه
+        data = settings_service.get_system_settings(self.db_path)
+        self.e_company.setText(str(data["company_name"] or ""))
+        self.e_vessel.setText(str(data["vessel_name"] or ""))
 
     def save_settings(self):
         comp = self.e_company.text().strip()
         vess = self.e_vessel.text().strip()
-        conn = sqlite3.connect('arn_ship_payroll.db')
-        conn.execute("UPDATE system_settings SET company_name=?, vessel_name=? WHERE id=1", 
-                     (comp, vess))
-        conn.commit()
-        conn.close()
+        # حفظ صادق: رسالة خطأ صريحة بدل «نجاح» كاذب (العيب F1)
+        if not settings_service.save_system_settings(comp, vess, self.db_path):
+            QMessageBox.critical(
+                self, "فشل الحفظ ❌",
+                "لم يتم حفظ بيانات الشركة والسفينة.\nتحقّق من وجود جدول الإعدادات وصلاحية الكتابة على قاعدة البيانات."
+            )
+            return
         QMessageBox.information(self, "نجاح", "تم حفظ بيانات الشركة والسفينة بنجاح!")
         # تحديث شريط الرأس في النافذة الرئيسية فوراً
         if self.parent():
@@ -223,7 +230,7 @@ class AdminWindow(QDialog):
 
     def load_users(self):
         self.table.setRowCount(0)
-        conn = sqlite3.connect('arn_ship_payroll.db')
+        conn = sqlite3.connect(self.db_path)
         users = conn.execute("SELECT id, username, full_name, role FROM users").fetchall()
         conn.close()
         
@@ -358,15 +365,20 @@ class AdminWindow(QDialog):
         lbl_role.setFont(QFont("Cairo", 10, QFont.Weight.Bold))
         c_role = QComboBox()
         c_role.setFont(QFont("Cairo", 11))
-        c_role.addItems(["Admin", "Captain", "Accountant"])
+        c_role.addItems(config.KNOWN_ROLES)
         
         if is_edit:
             u_id, username, full_name, role = user_data
             e_fullname.setText(full_name if full_name else "")
             e_username.setText(username if username else "")
-            index = c_role.findText(role, Qt.MatchFlag.MatchFixedString)
-            if index >= 0:
-                c_role.setCurrentIndex(index)
+            # لا ترقية صامتة: القيمة غير المعروفة تُضاف كما هي بدل السقوط على Admin (العيب F5)
+            normalized_role = normalize_role(role)
+            if normalized_role:
+                index = c_role.findText(normalized_role, Qt.MatchFlag.MatchFixedString)
+                if index < 0:
+                    c_role.addItem(normalized_role)
+                    index = c_role.findText(normalized_role, Qt.MatchFlag.MatchFixedString)
+                c_role.setCurrentIndex(max(index, 0))
                 
         layout.addWidget(lbl_fullname)
         layout.addWidget(e_fullname)
@@ -411,10 +423,16 @@ class AdminWindow(QDialog):
         if not username:
             QMessageBox.warning(form, "تنبيه", "يرجى إدخال اسم المستخدم!")
             return
+
+        # تطبيع الصلاحية ورفض القيم الفارغة (العيب F5)
+        role = normalize_role(role)
+        if role is None:
+            QMessageBox.warning(form, "تنبيه", "يرجى اختيار صلاحية صحيحة للمستخدم!")
+            return
             
         is_edit = user_data is not None
-        auth = AuthService()
-        conn = sqlite3.connect('arn_ship_payroll.db')
+        auth = AuthService(self.db_path)
+        conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         try:
@@ -431,6 +449,17 @@ class AdminWindow(QDialog):
                         "UPDATE users SET full_name=?, username=?, role=? WHERE id=?",
                         (full_name, username, role, u_id)
                     )
+                # تسجيل تغيير الصلاحية في سجل التدقيق (العيب F5)
+                old_role = normalize_role(user_data[3]) if len(user_data) > 3 else None
+                if old_role != role:
+                    try:
+                        from audit_service import AuditService
+                        AuditService(self.db_path).log(
+                            1, "ADMIN", "ROLE_CHANGED", "users", u_id,
+                            f"تغيير صلاحية المستخدم {username} من «{old_role}» إلى «{role}»"
+                        )
+                    except Exception:
+                        pass
                 QMessageBox.information(self, "نجاح", f"تم تحديث بيانات المستخدم '{username}' بنجاح.")
             else:
                 if not password:
@@ -506,9 +535,9 @@ class AdminWindow(QDialog):
                 return
                 
             try:
-                auth = AuthService()
+                auth = AuthService(self.db_path)
                 hashed = auth._hash_password(p1)
-                conn = sqlite3.connect('arn_ship_payroll.db')
+                conn = sqlite3.connect(self.db_path)
                 conn.execute(
                     "UPDATE users SET password_hash=?, password_salt=? WHERE id=?",
                     (hashed['hash'], hashed['salt'], u_id)
@@ -549,7 +578,7 @@ class AdminWindow(QDialog):
         
         if reply == QMessageBox.StandardButton.Yes:
             try:
-                conn = sqlite3.connect('arn_ship_payroll.db')
+                conn = sqlite3.connect(self.db_path)
                 conn.execute("DELETE FROM users WHERE id=?", (u_id,))
                 conn.commit()
                 conn.close()
@@ -588,7 +617,7 @@ class AdminWindow(QDialog):
         import os
         from datetime import datetime
 
-        db_path = 'arn_ship_payroll.db'
+        db_path = self.db_path
         if not os.path.exists(db_path):
             QMessageBox.critical(self, "خطأ", f"لم يتم العثور على ملف قاعدة البيانات: {db_path}")
             return
@@ -613,7 +642,7 @@ class AdminWindow(QDialog):
 
             try:
                 from audit_service import AuditService
-                AuditService().log(
+                AuditService(self.db_path).log(
                     1, "ADMIN", "BACKUP", "database", 0,
                     f"إنشاء نسخة احتياطية من قاعدة البيانات إلى: {os.path.basename(file_path)}"
                 )
@@ -672,7 +701,7 @@ class AdminWindow(QDialog):
             return
 
         try:
-            db_path = 'arn_ship_payroll.db'
+            db_path = self.db_path
             safety_copy = db_path + ".before_restore"
             if os.path.exists(db_path):
                 shutil.copy2(db_path, safety_copy)
@@ -681,7 +710,7 @@ class AdminWindow(QDialog):
 
             try:
                 from audit_service import AuditService
-                AuditService().log(
+                AuditService(self.db_path).log(
                     1, "ADMIN", "RESTORE", "database", 0,
                     f"استعادة نسخة احتياطية من الملف: {os.path.basename(file_path)}"
                 )

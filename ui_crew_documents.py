@@ -1,4 +1,5 @@
 # ui_crew_documents.py
+import paths
 """
 منظومة إدارة الشهادات والوثائق البحرية للطاقم - ARN Ship Payroll
 تطوير وبرمجة: عبده رجب نصار - ARN Technology (c) 2026
@@ -251,10 +252,10 @@ class EditDocDialog(QDialog):
 
 class CrewDocumentsWidget(QWidget):
     """ويدجت عرض وإدارة وثائق وشهادات بحار محدد"""
-    def __init__(self, crew_id: int, db_path: str = 'arn_ship_payroll.db', parent=None):
+    def __init__(self, crew_id: int, db_path: str = None, parent=None):
         super().__init__(parent)
         self.crew_id = crew_id
-        self.db_path = db_path
+        self.db_path = str(db_path) if db_path else paths.db_path_str()
         self.init_ui()
         self.load_documents()
 
@@ -478,11 +479,11 @@ class CrewDocumentsWidget(QWidget):
 
 class CrewDocumentsDialog(QDialog):
     """نافذة منبثقة مستقلة لعرض وإدارة شهادات ووثائق بحار محدد"""
-    def __init__(self, crew_id: int, crew_name: str = "", db_path: str = 'arn_ship_payroll.db', parent=None):
+    def __init__(self, crew_id: int, crew_name: str = "", db_path: str = None, parent=None):
         super().__init__(parent)
         self.crew_id = crew_id
         self.crew_name = crew_name
-        self.db_path = db_path
+        self.db_path = str(db_path) if db_path else paths.db_path_str()
 
         self.setWindowTitle(f"وثائق وشهادات البحار: {crew_name or crew_id} 📜")
         self.resize(850, 560)
@@ -523,9 +524,9 @@ class FleetDocumentsDialog(QDialog):
     المنظومة المركزية الشاملة لإدارة ومتابعة الشهادات والوثائق البحرية لكافة أفراد الطاقم
     (Crew Maritime Documents & STCW Compliance Console)
     """
-    def __init__(self, default_crew_id: Optional[int] = None, db_path: str = 'arn_ship_payroll.db', parent=None):
+    def __init__(self, default_crew_id: Optional[int] = None, db_path: str = None, parent=None):
         super().__init__(parent)
-        self.db_path = db_path
+        self.db_path = str(db_path) if db_path else paths.db_path_str()
         self.default_crew_id = default_crew_id
         self.all_docs_cache: List[Dict[str, Any]] = []
 

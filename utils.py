@@ -2,12 +2,62 @@
 import calendar
 from datetime import datetime
 
+KNOWN_ROLE_VALUES = ["Admin", "Captain", "Accountant", "Officer"]
+
+# تطبيع شائع للأحرف اللاتينية للأدوار (admin ⇒ Admin) دون إسقاط أي قيمة غير معروفة
+_ROLE_ALIASES = {r.lower(): r for r in KNOWN_ROLE_VALUES}
+
 RANK_HIERARCHY = [
     'MASTER', 'CH.OFF', '2nd.OFF', '3rd.OFF', 
     'CH.ENG', '2nd.ENG', '3rd.ENG', 'ELECTRICIAN', 
     'BOSUN', 'FITTER', 'PUMP MAN', 'A/B', 'O/S', 
     'OILER', 'WIPER', 'COOK', 'MESS BOY', 'CADET'
 ]
+
+def normalize_role(role_str):
+    """
+    تطبيع قيمة الصلاحية دون إسقاط معلومة:
+
+      • ``'admin'`` أو ``'ADMIN'``  ⇒ ``'Admin'``  (توحيد حالة الأحرف للقيَم المعروفة)
+      • ``'Officer'``               ⇒ ``'Officer'`` (قيمة غير معروفة؟ تبقى كما هي — لا تُرقّى صامتاً)
+      • ``''`` / ``None``           ⇒ ``None``      (يجب على المستدعي رفض الإدخال)
+
+    Returns:
+        str | None: القيمة المطبَّعة أو ``None`` إذا كان الإدخال فارغاً.
+    """
+    if role_str is None:
+        return None
+    value = str(role_str).strip()
+    if not value:
+        return None
+    return _ROLE_ALIASES.get(value.lower(), value)
+
+
+def is_known_role(role_str):
+    """هل القيمة ضمن الصلاحيات المعروفة (بعد التطبيع)؟"""
+    return normalize_role(role_str) in KNOWN_ROLE_VALUES
+
+
+def parse_non_negative(text, field_name="القيمة"):
+    """
+    تحويل نص إلى رقم غير سالب، أو رفع ``ValueError`` برسالة عربية واضحة.
+
+    تُستخدم في كل مسارات الإدخال المالي لمنع دخول قيم سالبة إلى الرواتب
+    (العيب F2: الإضافي/الخصم/السلف قيم موجبة دائماً، والإشارة من نوع الحقل لا من الرقم).
+    """
+    if text is None:
+        raise ValueError(f"لا يمكن ترك «{field_name}» فارغاً.")
+    raw = str(text).strip().replace(",", "")
+    if not raw:
+        raise ValueError(f"لا يمكن ترك «{field_name}» فارغاً.")
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        raise ValueError(f"قيمة غير رقمية في «{field_name}»: {text!r}")
+    if value < 0:
+        raise ValueError(f"لا يُقبل رقم سالب في «{field_name}» ({value}).")
+    return value
+
 
 def get_base_rank(rank_str):
     """استخراج الرتبة الأساسية بدون أرقام (مثال: 'MASTER 1' ترجع 'MASTER')"""

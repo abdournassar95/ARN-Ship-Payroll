@@ -5,9 +5,12 @@ import hashlib
 import base64
 import time
 
+import paths
+
 class AuthService:
-    def __init__(self, db_path='arn_ship_payroll.db'):
-        self.db_path = db_path
+    def __init__(self, db_path=None):
+        # المسار من paths (ثابت) وليس من مجلد التشغيل — العيب F12
+        self.db_path = str(db_path) if db_path else paths.db_path_str()
         self.failed_attempts = {}  # {username: [count, lock_until]}
 
     def _hash_password(self, password: str) -> dict:
@@ -104,6 +107,17 @@ class AuthService:
         except sqlite3.Error as e:
             return {"success": False, "message": f"خطأ في قاعدة البيانات: {str(e)}"}
 
+
+    def user_exists(self, username: str) -> bool:
+        """هل يوجد مستخدم بهذا الاسم؟ (تُستخدم لمنع إعادة الضبط الصامتة)"""
+        if not username:
+            return False
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                row = conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone()
+            return row is not None
+        except sqlite3.Error:
+            return False
 
     def create_test_user(self, username, password, full_name="Admin", role="admin"):
         hashed = self._hash_password(password)
