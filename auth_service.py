@@ -6,6 +6,7 @@ import base64
 import time
 
 import paths
+import db
 
 class AuthService:
     def __init__(self, db_path=None):
@@ -60,7 +61,7 @@ class AuthService:
             return {"success": False, "message": f"الحساب مقفل مؤقتاً. حاول بعد {remaining // 60} دقيقة و {remaining % 60} ثانية."}
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 cursor.execute(
@@ -113,7 +114,7 @@ class AuthService:
         if not username:
             return False
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 row = conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone()
             return row is not None
         except sqlite3.Error:
@@ -122,7 +123,7 @@ class AuthService:
     def create_test_user(self, username, password, full_name="Admin", role="admin"):
         hashed = self._hash_password(password)
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT OR REPLACE INTO users (username, full_name, role, password_hash, password_salt)

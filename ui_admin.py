@@ -11,6 +11,7 @@ from PyQt6.QtGui import QFont, QColor, QCursor
 from auth_service import AuthService
 from utils import normalize_role
 import config
+import db
 import paths
 import settings_service
 
@@ -230,7 +231,7 @@ class AdminWindow(QDialog):
 
     def load_users(self):
         self.table.setRowCount(0)
-        conn = sqlite3.connect(self.db_path)
+        conn = db.connect(self.db_path)
         users = conn.execute("SELECT id, username, full_name, role FROM users").fetchall()
         conn.close()
         
@@ -432,7 +433,7 @@ class AdminWindow(QDialog):
             
         is_edit = user_data is not None
         auth = AuthService(self.db_path)
-        conn = sqlite3.connect(self.db_path)
+        conn = db.connect(self.db_path)
         cursor = conn.cursor()
         
         try:
@@ -537,7 +538,7 @@ class AdminWindow(QDialog):
             try:
                 auth = AuthService(self.db_path)
                 hashed = auth._hash_password(p1)
-                conn = sqlite3.connect(self.db_path)
+                conn = db.connect(self.db_path)
                 conn.execute(
                     "UPDATE users SET password_hash=?, password_salt=? WHERE id=?",
                     (hashed['hash'], hashed['salt'], u_id)
@@ -578,7 +579,7 @@ class AdminWindow(QDialog):
         
         if reply == QMessageBox.StandardButton.Yes:
             try:
-                conn = sqlite3.connect(self.db_path)
+                conn = db.connect(self.db_path)
                 conn.execute("DELETE FROM users WHERE id=?", (u_id,))
                 conn.commit()
                 conn.close()
@@ -669,7 +670,7 @@ class AdminWindow(QDialog):
 
         # 1. فحص سلامة الملف المختار
         try:
-            with sqlite3.connect(file_path) as conn:
+            with db.session(file_path) as conn:
                 check_result = conn.execute("PRAGMA integrity_check").fetchone()
                 if not check_result or check_result[0].lower() != "ok":
                     raise ValueError(f"فشل فحص سلامة قاعدة البيانات: {check_result}")

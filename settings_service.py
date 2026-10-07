@@ -20,6 +20,7 @@ ARN Technology (c) 2026 — تطوير وبرمجة: عبده رجب نصار
 import sqlite3
 from typing import Dict, Optional
 
+import db
 import paths
 
 DEFAULT_COMPANY = "ARN FLEET MANAGEMENT"
@@ -45,11 +46,11 @@ def get_system_settings(db_path: Optional[str] = None) -> Dict[str, object]:
         "found": False,
     }
     try:
-        with sqlite3.connect(_resolve(db_path)) as conn:
+        with db.session(_resolve(db_path)) as conn:
             row = conn.execute(
                 "SELECT id, company_name, vessel_name FROM system_settings ORDER BY id LIMIT 1"
             ).fetchone()
-    except sqlite3.Error:
+    except (sqlite3.Error, Exception):
         return result
 
     if row:
@@ -73,7 +74,7 @@ def save_system_settings(company_name: str, vessel_name: str,
     vessel = (vessel_name or "").strip()
 
     try:
-        with sqlite3.connect(_resolve(db_path)) as conn:
+        with db.session(_resolve(db_path)) as conn:
             row = conn.execute(
                 "SELECT id FROM system_settings ORDER BY id LIMIT 1"
             ).fetchone()
@@ -91,7 +92,7 @@ def save_system_settings(company_name: str, vessel_name: str,
                 changed = True
             conn.commit()
             return changed
-    except sqlite3.Error:
+    except (sqlite3.Error, Exception):
         return False
 
 

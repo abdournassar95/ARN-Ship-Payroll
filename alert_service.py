@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 from audit_service import AuditService
 from notification_service import NotificationService
 import paths
+import db
 
 class AlertService:
     """
@@ -18,7 +19,7 @@ class AlertService:
 
     def _get_rule(self, rule_code: str) -> Optional[Dict[str, Any]]:
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
                 c.execute("SELECT * FROM alerts_rules WHERE rule_code = ?", (rule_code,))
@@ -32,7 +33,7 @@ class AlertService:
         فحص هل أُطلق نفس التنبيه لنفس الهدف خلال فترة التهدئة المحددة
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 c = conn.cursor()
                 query = """
                     SELECT triggered_at FROM alerts_history 
@@ -75,7 +76,7 @@ class AlertService:
             return False
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 c = conn.cursor()
                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 c.execute("""
@@ -118,18 +119,9 @@ class AlertService:
 
         threshold = float(rule.get('threshold_value') or 500.0)
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                c = conn.cursor()
-                c.execute("SELECT SUM(amount) FROM general_cash WHERE type='وارد'")
-                t_in = c.fetchone()[0] or 0.0
-                c.execute("SELECT SUM(amount) FROM general_cash WHERE type='صادر'")
-                t_out = c.fetchone()[0] or 0.0
-                c.execute("SELECT SUM(payment_cash) FROM payroll_history")
-                t_crew = c.fetchone()[0] or 0.0
-                c.execute("SELECT SUM(cleared_cash) FROM cash_reset_snapshot")
-                t_cleared = c.fetchone()[0] or 0.0
-
-            net_cash = round(t_in - t_out - (t_crew - t_cleared), 2)
+            # التعريف الموحّد الواحد لرصيد الصندوق (العيب F4) — نفس رقم الشاشة والتقرير
+            import cash_service
+            net_cash = cash_service.cash_balance(db_path=self.db_path)
             if net_cash < threshold:
                 msg = f"تحذير حرج: رصيد صندوق القبطان الحالي (${net_cash:,.2f}) انخفض عن الحد الأدنى المسموح (${threshold:,.2f})!"
                 return self._fire_alert(rule, msg, target_type="CASH", target_id=1, target_name="صندوق القبطان")
@@ -150,7 +142,7 @@ class AlertService:
 
         fired = False
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
                 if crew_id:
@@ -191,7 +183,7 @@ class AlertService:
         fired = False
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
                 c.execute("SELECT No, Name, contract_end FROM CrewWages WHERE contract_end IS NOT NULL AND contract_end != ''")
@@ -220,7 +212,7 @@ class AlertService:
         fired = False
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
                 c.execute("SELECT No, Name, PeriodFrom FROM CrewWages")
@@ -266,7 +258,7 @@ class AlertService:
         fired = False
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 c = conn.cursor()
                 # نفحص الشهرين السابقين
                 for months_back in [1, 2]:
@@ -300,7 +292,7 @@ class AlertService:
         fired = False
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
                 c.execute("""
@@ -333,7 +325,7 @@ class AlertService:
         since_str = (datetime.now() - timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 c = conn.cursor()
                 c.execute("""
                     SELECT COUNT(*) FROM audit_log 
@@ -361,7 +353,7 @@ class AlertService:
         fired = False
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
                 
@@ -421,7 +413,7 @@ class AlertService:
     def get_alerts_counts(self) -> Dict[str, int]:
         """إرجاع إحصائية التنبيهات المفتوحة والحرجة لتحديث الـ Badge"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 c = conn.cursor()
                 c.execute("SELECT COUNT(*) FROM alerts_history WHERE is_resolved = 0 AND is_read = 0")
                 unread = c.fetchone()[0] or 0
@@ -450,7 +442,7 @@ class AlertService:
 
     def get_alerts(self, severity: Optional[str] = None, only_unresolved: bool = True, limit: int = 100) -> List[Dict[str, Any]]:
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
                 query = "SELECT * FROM alerts_history WHERE 1=1"
@@ -470,7 +462,7 @@ class AlertService:
 
     def mark_as_read(self, alert_id: int) -> bool:
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.execute("UPDATE alerts_history SET is_read = 1 WHERE id = ?", (alert_id,))
                 conn.commit()
             counts = self.get_alerts_counts()
@@ -481,7 +473,7 @@ class AlertService:
 
     def mark_all_as_read(self) -> bool:
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.execute("UPDATE alerts_history SET is_read = 1 WHERE is_read = 0")
                 conn.commit()
             counts = self.get_alerts_counts()
@@ -492,7 +484,7 @@ class AlertService:
 
     def resolve_alert(self, alert_id: int, resolved_by_user_id: int = 1) -> bool:
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 conn.execute("""
                     UPDATE alerts_history 
@@ -508,7 +500,7 @@ class AlertService:
 
     def get_all_rules(self) -> List[Dict[str, Any]]:
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
                 c.execute("SELECT * FROM alerts_rules ORDER BY id ASC")
@@ -526,7 +518,7 @@ class AlertService:
         sound_enabled: bool
     ) -> bool:
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with db.session(self.db_path) as conn:
                 conn.execute("""
                     UPDATE alerts_rules 
                     SET threshold_value = ?, cooldown_hours = ?, severity = ?, is_enabled = ?, sound_enabled = ?

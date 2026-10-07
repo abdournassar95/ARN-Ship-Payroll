@@ -7,7 +7,8 @@ def init_db(db_path=None):
     if db_path is None:
         import paths
         db_path = paths.db_path_str()
-    conn = sqlite3.connect(db_path)
+    import db
+    conn = db.connect(db_path)
     cursor = conn.cursor()
     
     # 1. جدول المستخدمين

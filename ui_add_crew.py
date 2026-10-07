@@ -1,6 +1,6 @@
 # ui_add_crew.py
+import db
 import paths
-import sqlite3
 from datetime import datetime
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QComboBox, QLineEdit, QFrame, 
@@ -184,7 +184,7 @@ class AddCrewWindow(QDialog):
             contract_end = self.contract_end_cal.date().toString("yyyy-MM-dd")
             previous = float(self.prev_e.text() or 0)
             
-            conn = sqlite3.connect(self.db_path)
+            conn = db.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO CrewWages (Name, Rank, MonthlyWage, PeriodFrom, PREVIOUS, contract_start, contract_end) 
