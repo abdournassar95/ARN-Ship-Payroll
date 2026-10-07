@@ -8,16 +8,18 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont, QColor, QCursor
+import paths
 from audit_service import AuditService
 
 class AuditLogWindow(QDialog):
     """
     نافذة عرض وتصفية وتصدير سجل التدقيق (Audit Trail)
     """
-    def __init__(self, db_path: str = 'arn_ship_payroll.db', parent=None):
+    def __init__(self, db_path: str = None, parent=None):
         super().__init__(parent)
-        self.db_path = db_path
-        self.service = AuditService(db_path)
+        # المسار من النافذة الأم إن وُجد، وإلا من paths (ثابت) — العيب F12
+        self.db_path = str(db_path) if db_path else paths.db_path_str()
+        self.service = AuditService(self.db_path)
 
         self.setWindowTitle("سجل التدقيق والمراقبة 📋 | ARN Audit Trail")
         self.resize(1150, 720)

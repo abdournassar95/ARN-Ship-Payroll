@@ -1,4 +1,5 @@
 # ui_accounting.py
+import paths
 import sqlite3
 import json
 from datetime import datetime
@@ -86,6 +87,9 @@ class AccountingWindow(QDialog):
     def __init__(self, parent, crew_id, current_month, current_year):
         super().__init__(parent)
         self.parent_window = parent
+        # المسار من لوحة القيادة (المحرك) وإلا من paths (ثابت) — العيب F12
+        engine = getattr(parent, 'engine', None)
+        self.db_path = str(getattr(engine, 'db_path', '') or paths.db_path_str())
         self.crew_id = crew_id
         self.current_month = current_month
         self.current_year = current_year
@@ -133,7 +137,7 @@ class AccountingWindow(QDialog):
         widget.setGraphicsEffect(shadow)
 
     def load_db_data(self):
-        conn = sqlite3.connect('arn_ship_payroll.db')
+        conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         crew = cursor.execute("SELECT * FROM CrewWages WHERE No = ?", (self.crew_id,)).fetchone()
@@ -148,7 +152,7 @@ class AccountingWindow(QDialog):
         if key in self.history_cache:
             return self.history_cache[key]
             
-        conn = sqlite3.connect('arn_ship_payroll.db')
+        conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         hist = cursor.execute("SELECT * FROM payroll_history WHERE crew_id = ? AND payroll_month = ? AND payroll_year = ?", 
@@ -696,7 +700,7 @@ class AccountingWindow(QDialog):
                     
             wage_history_json = json.dumps(wage_history)
 
-            conn = sqlite3.connect('arn_ship_payroll.db')
+            conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE CrewWages 

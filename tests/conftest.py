@@ -3,6 +3,19 @@ import pytest
 import sqlite3
 from database import init_db
 from auth_service import AuthService
+import paths
+
+
+@pytest.fixture(autouse=True)
+def isolate_default_db_path(tmp_path, monkeypatch):
+    """
+    يوجّه مسار قاعدة البيانات الافتراضي إلى مجلد مؤقت لكل اختبار.
+
+    يمنع تكرار العيب F11/F12: كانت الاختبارات تُنشئ ملفاً صفريّاً
+    ``arn_ship_payroll.db`` في جذر المستودع لمجرّد استيراد/تشغيل خدمة بلا مسار.
+    """
+    monkeypatch.setenv(paths.ENV_DB_PATH, str(tmp_path / "default_test.db"))
+    yield
 
 @pytest.fixture
 def temp_db_path(tmp_path):

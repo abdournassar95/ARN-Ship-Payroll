@@ -9,6 +9,10 @@ import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
+import paths
+import settings_service
+
+
 class ReportService:
     _app = None
 
@@ -29,31 +33,29 @@ class ReportService:
         ui_total_due = float(crew.get('total_due', 0))
         curr_extra = float(crew.get('curr_extra', crew.get('extra', 0)))
         curr_ded = float(crew.get('curr_ded', crew.get('deduction', 0)))
+        prev_balance = float(crew.get('prev_balance', 0))
         
         # Fetch company and vessel name if not present
         company_name = crew.get('company_name')
         vessel_name = crew.get('vessel_name')
         if not company_name or not vessel_name:
-            import sqlite3
             try:
-                conn = sqlite3.connect('arn_ship_payroll.db')
-                c = conn.cursor()
-                c.execute("SELECT company_name, vessel_name FROM system_settings LIMIT 1")
-                row = c.fetchone()
-                if row:
-                    company_name = company_name or row[0] or "ARN FLEET MANAGEMENT"
-                    vessel_name = vessel_name or row[1] or "Vessel"
-                conn.close()
+                # مصدر واحد للإعدادات (العيب F1)
+                data = settings_service.get_system_settings()
+                company_name = company_name or data["company_name"]
+                vessel_name = vessel_name or data["vessel_name"]
             except Exception:
                 pass
         
         company_name = company_name or "ARN FLEET MANAGEMENT"
         vessel_name = vessel_name or "Vessel"
         
-        # في لوحة التحكم، total_due يتضمن المكافأة ويخصم منه الخصميات مباشرة
-        # لضبط شكل الكشف (أجر الفترة + مكافآت = إجمالي المستحق)
-        period_wage = ui_total_due - curr_extra + curr_ded
-        total_earnings = period_wage + curr_extra
+        # إجمالي المستحق القادم من محرك الرواتب (PayrollEngine) يساوي:
+        #     أجر الفترة + إضافي + رصيد سابق − خصم مباشر
+        # لذلك نستخرج «أجر الفترة» ثم نُعيد تركيب الإجمالي بنفس المعادلة،
+        # وبذلك يطابق الكشف محرك الرواتب حرفياً (بدل إعادة إدخال الخصم في الإجمالي).
+        period_wage = ui_total_due - curr_extra - prev_balance + curr_ded
+        total_earnings = period_wage + curr_extra + prev_balance - curr_ded
         
         return {
             'company_name': str(company_name),
@@ -66,6 +68,7 @@ class ReportService:
             'worked_days': float(crew.get('worked_days', crew.get('net_days', 0))),
             'total_due': period_wage,
             'extra': curr_extra,
+            'prev_balance': prev_balance,
             'total_earnings': total_earnings,
             'deduction': curr_ded,
             'payment_cash': float(crew.get('payment_cash', crew.get('cum_cash', 0))),
@@ -149,6 +152,24 @@ class ReportService:
         safe_company = html.escape(c['company_name'])
         safe_vessel = html.escape(c['vessel_name'])
 
+        # سطر الرصيد السابق يظهر فقط عند وجود رصيد مرحّل (موجب أو سالب)
+        prev_row_html = ""
+        if abs(c['prev_balance']) > 0.004:
+            prev_color = "#059669" if c['prev_balance'] >= 0 else "#DC2626"
+            prev_value = (
+                f'({cls._format_currency(abs(c["prev_balance"]))})'
+                if c['prev_balance'] < 0
+                else cls._format_currency(c['prev_balance'])
+            )
+            prev_row_html = (
+                '<tr>'
+                '<td align="right" style="border-bottom: 1px solid #E2E8F0; padding-top: 8px; color: #334155;">'
+                'رصيد سابق (Previous Balance)</td>'
+                f'<td align="left" style="border-bottom: 1px solid #E2E8F0; padding-top: 8px; font-weight: bold; color: {prev_color};">'
+                f'${prev_value}</td>'
+                '</tr>'
+            )
+
         return f"""
         <div style="padding: 10px; font-family: 'Cairo', sans-serif;">
             <!-- Header Card -->
@@ -200,6 +221,7 @@ class ReportService:
                                 <td align="right" style="border-bottom: 1px solid #94A3B8; padding-top: 8px; color: #334155;">مكافآت (Bonus)</td>
                                 <td align="left" style="border-bottom: 1px solid #94A3B8; padding-top: 8px; font-weight: bold;">+${cls._format_currency(c['extra'])}</td>
                             </tr>
+                            {prev_row_html}
                             <tr>
                                 <td align="right" style="padding-top: 10px; font-weight: bold; color: #0F172A; font-size: 11pt;">إجمالي المستحق (Total Due)</td>
                                 <td align="left" style="padding-top: 10px; font-weight: bold; color: #0F172A; font-size: 11pt;">${cls._format_currency(c['total_earnings'])}</td>
@@ -276,6 +298,71 @@ class ReportService:
             </table>
         </div>
         """
+
+    @classmethod
+    def generate_table_report(cls, title: str, subtitle: str, headers: List[str], rows: List[List[Any]],
+                              output_path: str, col_pct: Optional[List[float]] = None,
+                              orientation: QPageLayout.Orientation = QPageLayout.Orientation.Landscape,
+                              footer_note: str = "ARN Technology — تقرير رسمي مُولَّد آلياً",
+                              page_size: QPageSize.PageSizeId = QPageSize.PageSizeId.A4) -> str:
+        """
+        توليد تقرير جدولي رسمي (HTML ← PDF عبر Qt) بدعم كامل للعربية (RTL).
+
+        يُستخدم في سجل التدقيق ومركز التنبيهات، ويضمن ظهور النص العربي سليماً
+        دون الاعتماد على خطوط لاتينية (مثل Helvetica في reportlab) التي تُظهر العربية
+        كصناديق فارغة. كما يوحّد شكل التقارير مع كشوف الرواتب القائمة.
+        """
+        headers = [str(h) for h in headers]
+        n = max(1, len(headers))
+        if not col_pct or len(col_pct) != n:
+            col_pct = [round(100.0 / n, 2)] * n
+
+        th_html = "".join(
+            f'<th width="{c}%" style="border: 1px solid #334155; color: #F8FAFC; padding: 6px; font-size: 8.5pt;">{html.escape(h)}</th>'
+            for h, c in zip(headers, col_pct)
+        )
+
+        tr_html = []
+        for i, row in enumerate(rows):
+            bg = "#F8FAFC" if i % 2 else "#FFFFFF"
+            cells = "".join(
+                '<td align="center" style="border: 1px solid #CBD5E1; padding: 4px; font-size: 8pt;">'
+                f'{html.escape("" if v is None else str(v))}</td>'
+                for v in row
+            )
+            tr_html.append(f'<tr bgcolor="{bg}">{cells}</tr>')
+
+        if not tr_html:
+            tr_html.append(
+                f'<tr><td colspan="{n}" align="center" style="padding: 18px; color: #64748B;">لا توجد بيانات للعرض.</td></tr>'
+            )
+
+        html_content = f"""<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head><meta charset="UTF-8"></head>
+<body style="font-family: 'Cairo', sans-serif; direction: rtl; margin: 0; padding: 5px;">
+    <table width="100%" cellpadding="4" cellspacing="0" style="border-bottom: 2px solid #1E3A8A; margin-bottom: 10px;">
+        <tr>
+            <td align="center">
+                <div style="font-size: 16pt; font-weight: bold; color: #1E3A8A;">{html.escape(title)}</div>
+                <div style="font-size: 9.5pt; color: #475569; margin-top: 4px;">{html.escape(subtitle)}</div>
+            </td>
+        </tr>
+    </table>
+    <table width="100%" cellpadding="3" cellspacing="0" style="border-collapse: collapse; border: 1px solid #CBD5E1;">
+        <thead><tr bgcolor="#0F172A">{th_html}</tr></thead>
+        <tbody>{''.join(tr_html)}</tbody>
+    </table>
+    <table width="100%" cellspacing="0" cellpadding="4" style="margin-top: 14px; border-top: 1px solid #E2E8F0;">
+        <tr>
+            <td align="right" style="font-size: 8.5pt; color: #64748B;">{html.escape(footer_note)}</td>
+            <td align="left" style="font-size: 8.5pt; color: #64748B;">تاريخ الإصدار: {datetime.now().strftime('%Y-%m-%d %H:%M')}</td>
+        </tr>
+    </table>
+</body>
+</html>"""
+
+        return cls._render_pdf(html_content, output_path, page_size=page_size, orientation=orientation)
 
     @classmethod
     def _render_pdf(cls, html_content: str, output_path: str, page_size: QPageSize.PageSizeId = QPageSize.PageSizeId.A4,
@@ -506,17 +593,10 @@ class ReportService:
         if not crew_data_list:
             raise ValueError("لا توجد بيانات بحارة لطباعتها في كشف المسير.")
 
-        company_name = "ARN FLEET MANAGEMENT"
-        vessel_name = "Vessel"
-        import sqlite3
-        try:
-            with sqlite3.connect('arn_ship_payroll.db') as conn:
-                row = conn.execute("SELECT company_name, vessel_name FROM system_settings LIMIT 1").fetchone()
-                if row:
-                    company_name = row[0] or company_name
-                    vessel_name = row[1] or vessel_name
-        except Exception:
-            pass
+        # مصدر واحد للإعدادات (العيب F1)
+        data = settings_service.get_system_settings()
+        company_name = data["company_name"]
+        vessel_name = data["vessel_name"]
 
         month_names = {1: 'يناير', 2: 'فبراير', 3: 'مارس', 4: 'أبريل', 5: 'مايو', 6: 'يونيو', 
                        7: 'يوليو', 8: 'أغسطس', 9: 'سبتمبر', 10: 'أكتوبر', 11: 'نوفمبر', 12: 'ديسمبر'}
@@ -525,6 +605,8 @@ class ReportService:
         rows_html = []
         tot_wage = 0.0
         tot_extra = 0.0
+        tot_prev = 0.0
+        tot_ded = 0.0
         tot_due = 0.0
         tot_cash = 0.0
         tot_cig = 0.0
@@ -538,6 +620,8 @@ class ReportService:
             days = c['worked_days']
             p_wage = c['total_due']
             extra = c['extra']
+            prev = c['prev_balance']
+            ded = c['deduction']
             t_due = c['total_earnings']
             c_cash = c['payment_cash']
             c_cig = c['cigarette']
@@ -547,6 +631,8 @@ class ReportService:
 
             tot_wage += b_wage
             tot_extra += extra
+            tot_prev += prev
+            tot_ded += ded
             tot_due += t_due
             tot_cash += c_cash
             tot_cig += c_cig
@@ -562,16 +648,18 @@ class ReportService:
                 <td align="center" style="border: 1px solid #CBD5E1; padding: 4px; font-size: 8pt;">{i + 1}</td>
                 <td align="right" style="border: 1px solid #CBD5E1; padding: 4px; font-size: 8pt; font-weight: bold;">{html.escape(c['name'])}</td>
                 <td align="center" style="border: 1px solid #CBD5E1; padding: 4px; font-size: 8pt;">{html.escape(c['rank'])}</td>
-                <td align="center" style="border: 1px solid #CBD5E1; padding: 4px; font-size: 8pt;">${cls._format_currency(b_wage)}</td>
+                <td align="center" style="border: 1px solid #CBD5E1; padding: 3px 2px; font-size: 7.5pt; white-space: nowrap;">${cls._format_currency(b_wage)}</td>
                 <td align="center" style="border: 1px solid #CBD5E1; padding: 4px; font-size: 8pt;">{days}</td>
-                <td align="center" style="border: 1px solid #CBD5E1; padding: 4px; font-size: 8pt;">${cls._format_currency(p_wage)}</td>
-                <td align="center" style="border: 1px solid #CBD5E1; padding: 4px; font-size: 8pt; color: #059669;">+${cls._format_currency(extra)}</td>
-                <td align="center" style="border: 1px solid #CBD5E1; padding: 4px; font-size: 8pt; font-weight: bold; color: #1E3A8A;">${cls._format_currency(t_due)}</td>
-                <td align="center" style="border: 1px solid #CBD5E1; padding: 4px; font-size: 8pt;">${cls._format_currency(c_cash)}</td>
-                <td align="center" style="border: 1px solid #CBD5E1; padding: 4px; font-size: 8pt;">${cls._format_currency(c_cig)}</td>
-                <td align="center" style="border: 1px solid #CBD5E1; padding: 4px; font-size: 8pt;">${cls._format_currency(c_trans)}</td>
-                <td align="center" style="border: 1px solid #CBD5E1; padding: 4px; font-size: 8pt;">${cls._format_currency(t_recv)}</td>
-                <td align="center" style="border: 1px solid #CBD5E1; padding: 4px; font-size: 8pt; font-weight: bold; color: {bal_color};">${cls._format_currency(f_bal)}</td>
+                <td align="center" style="border: 1px solid #CBD5E1; padding: 3px 2px; font-size: 7.5pt; white-space: nowrap;">${cls._format_currency(p_wage)}</td>
+                <td align="center" style="border: 1px solid #CBD5E1; padding: 3px 2px; font-size: 7.5pt; color: #059669; white-space: nowrap;">${cls._format_currency(extra)}</td>
+                <td align="center" style="border: 1px solid #CBD5E1; padding: 3px 2px; font-size: 7.5pt; color: {'#059669' if prev >= 0 else '#DC2626'}; white-space: nowrap;">${'(' + cls._format_currency(abs(prev)) + ')' if prev < 0 else cls._format_currency(prev)}</td>
+                <td align="center" style="border: 1px solid #CBD5E1; padding: 3px 2px; font-size: 7.5pt; color: #DC2626; white-space: nowrap;">${cls._format_currency(ded)}</td>
+                <td align="center" style="border: 1px solid #CBD5E1; padding: 3px 2px; font-size: 7.5pt; font-weight: bold; color: #1E3A8A; white-space: nowrap;">${cls._format_currency(t_due)}</td>
+                <td align="center" style="border: 1px solid #CBD5E1; padding: 3px 2px; font-size: 7.5pt; white-space: nowrap;">${cls._format_currency(c_cash)}</td>
+                <td align="center" style="border: 1px solid #CBD5E1; padding: 3px 2px; font-size: 7.5pt; white-space: nowrap;">${cls._format_currency(c_cig)}</td>
+                <td align="center" style="border: 1px solid #CBD5E1; padding: 3px 2px; font-size: 7.5pt; white-space: nowrap;">${cls._format_currency(c_trans)}</td>
+                <td align="center" style="border: 1px solid #CBD5E1; padding: 3px 2px; font-size: 7.5pt; white-space: nowrap;">${cls._format_currency(t_recv)}</td>
+                <td align="center" style="border: 1px solid #CBD5E1; padding: 3px 2px; font-size: 7.5pt; font-weight: bold; color: {bal_color}; white-space: nowrap;">${cls._format_currency(f_bal)}</td>
                 <td align="center" style="border: 1px solid #CBD5E1; padding: 4px; font-size: 7pt; color: #94A3B8;">&nbsp;</td>
             </tr>
             """)
@@ -607,37 +695,41 @@ class ReportService:
         <thead>
             <tr bgcolor="#0F172A">
                 <th width="3%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">م</th>
-                <th width="15%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">اسم البحار الكامل</th>
-                <th width="8%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">الرتبة</th>
-                <th width="7%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">الراتب $</th>
+                <th width="10%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">اسم البحار</th>
+                <th width="6%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">الرتبة</th>
+                <th width="6%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">الراتب $</th>
                 <th width="4%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">أيام</th>
-                <th width="7%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">أجر الفترة</th>
-                <th width="6%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">إضافي</th>
-                <th width="8%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">إجمالي المستحق</th>
-                <th width="6%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">سلف كاش</th>
+                <th width="6%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">أجر الفترة</th>
+                <th width="5%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">إضافي</th>
+                <th width="6%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">رصيد سابق</th>
+                <th width="6%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">خصم مباشر</th>
+                <th width="7%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">إجمالي المستحق</th>
+                <th width="5%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">سلف كاش</th>
                 <th width="5%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">سجائر</th>
-                <th width="6%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">تحويل</th>
+                <th width="5%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">تحويل</th>
                 <th width="7%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">إجمالي المستلم</th>
-                <th width="8%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">الصافي المتبقي</th>
-                <th width="10%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">توقيع البحار</th>
+                <th width="6%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">الصافي المتبقي</th>
+                <th width="12%" style="border: 1px solid #334155; color: #F8FAFC; padding: 5px; font-size: 8pt;">توقيع</th>
             </tr>
         </thead>
         <tbody>
             {table_rows_str}
             <!-- صف الإجماليات -->
             <tr bgcolor="#E2E8F0" style="font-weight: bold;">
-                <td colspan="3" align="center" style="border: 1px solid #94A3B8; padding: 6px; font-size: 8.5pt;">الإجمالي الكلي (Total Summary)</td>
-                <td align="center" style="border: 1px solid #94A3B8; padding: 6px; font-size: 8.5pt;">${cls._format_currency(tot_wage)}</td>
-                <td align="center" style="border: 1px solid #94A3B8; padding: 6px; font-size: 8.5pt;">-</td>
-                <td align="center" style="border: 1px solid #94A3B8; padding: 6px; font-size: 8.5pt;">-</td>
-                <td align="center" style="border: 1px solid #94A3B8; padding: 6px; font-size: 8.5pt; color: #059669;">+${cls._format_currency(tot_extra)}</td>
-                <td align="center" style="border: 1px solid #94A3B8; padding: 6px; font-size: 8.5pt; color: #1E3A8A;">${cls._format_currency(tot_due)}</td>
-                <td align="center" style="border: 1px solid #94A3B8; padding: 6px; font-size: 8.5pt;">${cls._format_currency(tot_cash)}</td>
-                <td align="center" style="border: 1px solid #94A3B8; padding: 6px; font-size: 8.5pt;">${cls._format_currency(tot_cig)}</td>
-                <td align="center" style="border: 1px solid #94A3B8; padding: 6px; font-size: 8.5pt;">${cls._format_currency(tot_trans)}</td>
-                <td align="center" style="border: 1px solid #94A3B8; padding: 6px; font-size: 8.5pt;">${cls._format_currency(tot_recv)}</td>
-                <td align="center" style="border: 1px solid #94A3B8; padding: 6px; font-size: 8.5pt; color: #1E3A8A;">${cls._format_currency(tot_net)}</td>
-                <td align="center" style="border: 1px solid #94A3B8; padding: 6px; font-size: 8.5pt;">-</td>
+                <td colspan="3" align="center" style="border: 1px solid #94A3B8; padding: 4px 2px; font-size: 8pt;">الإجمالي الكلي (Total Summary)</td>
+                <td align="center" style="border: 1px solid #94A3B8; padding: 4px 2px; font-size: 8pt; white-space: nowrap;">${cls._format_currency(tot_wage)}</td>
+                <td align="center" style="border: 1px solid #94A3B8; padding: 4px 2px; font-size: 8pt;">-</td>
+                <td align="center" style="border: 1px solid #94A3B8; padding: 4px 2px; font-size: 8pt;">-</td>
+                <td align="center" style="border: 1px solid #94A3B8; padding: 4px 2px; font-size: 8pt; color: #059669; white-space: nowrap;">${cls._format_currency(tot_extra)}</td>
+                <td align="center" style="border: 1px solid #94A3B8; padding: 4px 2px; font-size: 8pt; white-space: nowrap;">${'(' + cls._format_currency(abs(tot_prev)) + ')' if tot_prev < 0 else cls._format_currency(tot_prev)}</td>
+                <td align="center" style="border: 1px solid #94A3B8; padding: 4px 2px; font-size: 8pt; color: #DC2626; white-space: nowrap;">${cls._format_currency(tot_ded)}</td>
+                <td align="center" style="border: 1px solid #94A3B8; padding: 4px 2px; font-size: 8pt; color: #1E3A8A; white-space: nowrap;">${cls._format_currency(tot_due)}</td>
+                <td align="center" style="border: 1px solid #94A3B8; padding: 4px 2px; font-size: 8pt; white-space: nowrap;">${cls._format_currency(tot_cash)}</td>
+                <td align="center" style="border: 1px solid #94A3B8; padding: 4px 2px; font-size: 8pt; white-space: nowrap;">${cls._format_currency(tot_cig)}</td>
+                <td align="center" style="border: 1px solid #94A3B8; padding: 4px 2px; font-size: 8pt; white-space: nowrap;">${cls._format_currency(tot_trans)}</td>
+                <td align="center" style="border: 1px solid #94A3B8; padding: 4px 2px; font-size: 8pt; white-space: nowrap;">${cls._format_currency(tot_recv)}</td>
+                <td align="center" style="border: 1px solid #94A3B8; padding: 4px 2px; font-size: 8pt; color: #1E3A8A; white-space: nowrap;">${cls._format_currency(tot_net)}</td>
+                <td align="center" style="border: 1px solid #94A3B8; padding: 4px 2px; font-size: 8pt;">-</td>
             </tr>
         </tbody>
     </table>
@@ -700,7 +792,7 @@ class ReportService:
         thin_side = Side(style="thin", color="CBD5E1")
         border_all = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
 
-        ws.merge_cells("A1:N1")
+        ws.merge_cells("A1:P1")
         ws["A1"] = f"كشف مسير رواتب الطاقم الشهري - {month:02d}/{year}"
         ws["A1"].font = font_title
         ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
@@ -708,9 +800,11 @@ class ReportService:
 
         headers = [
             "م", "اسم البحار", "الرتبة", "الراتب الأساسي ($)", "أيام العمل",
-            "أجر الفترة ($)", "إضافي ($)", "إجمالي المستحق ($)", "سلف كاش ($)",
-            "سجائر ($)", "تحويل ($)", "إجمالي المستلم ($)", "صافي الرصيد ($)", "حالة التسوية"
+            "أجر الفترة ($)", "إضافي ($)", "رصيد سابق ($)", "خصم مباشر ($)",
+            "إجمالي المستحق ($)", "سلف كاش ($)", "سجائر ($)", "تحويل ($)",
+            "إجمالي المستلم ($)", "صافي الرصيد ($)", "حالة التسوية"
         ]
+        money_cols = [4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 
         ws.append([]) # row 2
         ws.append(headers) # row 3
@@ -736,6 +830,8 @@ class ReportService:
                 c['worked_days'],
                 c['total_due'],
                 c['extra'],
+                c['prev_balance'],
+                c['deduction'],
                 c['total_earnings'],
                 c['payment_cash'],
                 c['cigarette'],
@@ -754,7 +850,7 @@ class ReportService:
                 if i % 2 == 1:
                     cell.fill = zebra_fill
 
-                if col_num in [4, 6, 7, 8, 9, 10, 11, 12, 13]:
+                if col_num in money_cols:
                     cell.number_format = '$#,##0.00'
                     cell.alignment = Alignment(horizontal="center", vertical="center")
                 elif col_num == 2:
@@ -766,19 +862,19 @@ class ReportService:
         sum_row = 4 + len(crew_data_list)
         ws.append(["الإجمالي الكلي", "", ""] + [
             f"=SUM({get_column_letter(col)}4:{get_column_letter(col)}{sum_row-1})"
-            if col in [4, 6, 7, 8, 9, 10, 11, 12, 13] else ""
-            for col in range(4, 15)
+            if col in money_cols else ""
+            for col in range(4, 17)
         ])
         ws.merge_cells(f"A{sum_row}:C{sum_row}")
         ws.row_dimensions[sum_row].height = 24
 
-        for col_num in range(1, 15):
+        for col_num in range(1, 17):
             cell = ws.cell(row=sum_row, column=col_num)
             cell.fill = summary_fill
             cell.font = font_bold
             cell.border = border_all
             cell.alignment = Alignment(horizontal="center", vertical="center")
-            if col_num in [4, 6, 7, 8, 9, 10, 11, 12, 13]:
+            if col_num in money_cols:
                 cell.number_format = '$#,##0.00'
 
         for col in ws.columns:
@@ -895,19 +991,10 @@ class ReportService:
             output_path = os.path.join(out_dir, f"crew_documents_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf")
 
         # بيانات السفينة
-        company_name = "ARN FLEET MANAGEMENT"
-        vessel_name = "Vessel"
-        import sqlite3
-        try:
-            with sqlite3.connect('arn_ship_payroll.db') as conn:
-                c = conn.cursor()
-                c.execute("SELECT company_name, vessel_name FROM system_settings LIMIT 1")
-                row = c.fetchone()
-                if row:
-                    company_name = row[0] or company_name
-                    vessel_name = row[1] or vessel_name
-        except Exception:
-            pass
+        # مصدر واحد للإعدادات (العيب F1)
+        data = settings_service.get_system_settings()
+        company_name = data["company_name"]
+        vessel_name = data["vessel_name"]
 
         today = datetime.now().date()
         print_date = datetime.now().strftime('%Y-%m-%d %H:%M')
